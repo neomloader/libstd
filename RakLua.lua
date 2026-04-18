@@ -25,11 +25,6 @@ local function hookAddEventHandler(event, func)
     end
 end
 
-local function defineSampLuaCompatibility() -- To be removed
-    addEventHandler = hookAddEventHandler
-    isSampfuncsLoaded = function() return true end
-end
-
-RakLuaSO.defineSampLuaCompatibility = defineSampLuaCompatibility
+addEventHandler = hookAddEventHandler
 
 return RakLuaSO
