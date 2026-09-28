@@ -530,11 +530,25 @@ local ImFontConfig_mt = {
     __index = function(self, k)
         if k == "FontBuilderFlags" then
             return self.FontLoaderFlags
+        elseif k == "GlyphExtraSpacing" then
+            return setmetatable({}, {
+                __index = function(_, ax)
+                    if ax == "x" then return self.GlyphExtraAdvanceX end
+                    return 0
+                end,
+                __newindex = function(_, ax, val)
+                    if ax == "x" then self.GlyphExtraAdvanceX = tonumber(val) or 0 end
+                end
+            })
         end
     end,
     __newindex = function(self, k, v)
         if k == "FontBuilderFlags" then
             self.FontLoaderFlags = v
+        elseif k == "GlyphExtraSpacing" then
+            if type(v) == "table" or type(v) == "cdata" then
+                self.GlyphExtraAdvanceX = tonumber(v.x) or 0
+            end
         end
     end
 }
@@ -548,6 +562,44 @@ end
 mimgui.ImFontConfig = function()
     return ImFontConfig_ctor()
 end
+
+local ImFont_methods = {
+    CalcTextSizeA = function(self, size, max_width, wrap_width, text, text_end, out_remaining)
+        local max_w = tonumber(max_width) or 3.402823466e+38
+        local wrap_w = tonumber(wrap_width) or 0.0
+        local sz = tonumber(size) or (self.FontSize > 0 and self.FontSize or 14.0)
+        local text_str = tostring(text or "")
+        local res = ffi.C.ImFont_CalcTextSizeA(self, sz, max_w, wrap_w, text_str, text_end or ffi.null, out_remaining or ffi.null)
+        return ImVec2(res.x, res.y)
+    end,
+    FindGlyph = function(self, c)
+        return ffi.C.ImFont_FindGlyph(self, c)
+    end,
+    FindGlyphNoFallback = function(self, c)
+        return ffi.C.ImFont_FindGlyphNoFallback(self, c)
+    end,
+    GetCharAdvance = function(self, c)
+        return ffi.C.ImFont_GetCharAdvance(self, c)
+    end,
+    IsLoaded = function(self)
+        return ffi.C.ImFont_IsLoaded(self)
+    end,
+    GetDebugName = function(self)
+        local str = ffi.C.ImFont_GetDebugName(self)
+        return str ~= ffi.null and ffi.string(str) or ""
+    end,
+}
+
+ffi.metatype("ImFont", {
+    __index = function(self, k)
+        if k == "ConfigData" then
+            return self.Sources
+        elseif k == "ConfigDataCount" then
+            return self.Sources ~= nil and self.Sources.Size or 0
+        end
+        return ImFont_methods[k]
+    end,
+})
 
 local function to_u32_color(c)
     if type(c) == "number" then
@@ -604,6 +656,21 @@ local ImDrawList_methods = {
             local r = ffi.C.ImDrawList_AddText_Vec2(self, to_vec2(arg1), to_u32_color(arg2), tostring(arg3 or ""), nil)
             return r
         end
+    end,
+    AddTextFontPtr = function(self, font, font_size, pos, col, text_begin, text_end, wrap_width, cpu_fine_clip_rect)
+        local clip_rect = nil
+        if cpu_fine_clip_rect ~= nil then
+            if type(cpu_fine_clip_rect) == "cdata" and ffi.istype("ImVec4", cpu_fine_clip_rect) then
+                clip_rect = cpu_fine_clip_rect
+            elseif type(cpu_fine_clip_rect) == "table" then
+                clip_rect = ffi.new("ImVec4[1]", to_vec4(cpu_fine_clip_rect))
+            end
+        end
+        local text_str = tostring(text_begin or "")
+        return ffi.C.ImDrawList_AddText_FontPtr(self, font, font_size or 14.0, to_vec2(pos), to_u32_color(col), text_str, text_end or ffi.null, wrap_width or 0.0, clip_rect)
+    end,
+    AddTextVec2 = function(self, pos, col, text_begin, text_end)
+        return ffi.C.ImDrawList_AddText_Vec2(self, to_vec2(pos), to_u32_color(col), tostring(text_begin or ""), text_end or ffi.null)
     end,
     AddImage = function(self, tex, p_min, p_max, uv_min, uv_max, col)
         local ref = to_tex_ref(tex)
@@ -1035,6 +1102,27 @@ ffi.metatype("ImFontAtlas", {
     __index = function(self, k)
         if k == "FontsCount" then
             return self.Fonts ~= nil and self.Fonts.Size or 0
+        elseif k == "ConfigData" then
+            if self.Sources ~= nil and self.Sources.Size > 0 and self.Sources.Data ~= nil then
+                return self.Sources
+            end
+            local default_ranges = ffi.C.ImFontAtlas_GetGlyphRangesDefault(self)
+            local fallback_cfg = imgui.ImFontConfig()
+            fallback_cfg.GlyphRanges = default_ranges
+            local proxy = {
+                Size = 1,
+                Data = setmetatable({}, {
+                    __index = function(d, idx)
+                        return fallback_cfg
+                    end
+                })
+            }
+            return setmetatable(proxy, {
+                __index = function(t, idx)
+                    if type(idx) == "number" then return fallback_cfg end
+                    return rawget(t, idx)
+                end
+            })
         end
         return atlas_methods[k]
     end
@@ -1122,7 +1210,36 @@ mimgui.ImVector_ImWchar = setmetatable({
     __call = function(_, ...) return ImVector_ImWchar_ctor(...) end
 })
 
+local abs_drag_cache = {}
+for i = 0, 4 do
+    abs_drag_cache[i] = ImVec2(0, 0)
+end
+
 local io_compat = {
+    MouseDragMaxDistanceAbs = setmetatable({}, {
+        __index = function(_, btn)
+            local b = tonumber(btn) or 0
+            if b < 0 or b > 4 then b = 0 end
+            local dist = 0
+            local ok, io = pcall(ffi.C.igGetIO_Nil)
+            if ok and io ~= nil and io ~= ffi.null then
+                local ok_sqr, sqr = pcall(function() return io.MouseDragMaxDistanceSqr[b] end)
+                if ok_sqr and sqr and sqr > 0 then
+                    dist = math.sqrt(sqr)
+                end
+            end
+            local ok_delta, delta = pcall(ffi.C.igGetMouseDragDelta, b, -1.0)
+            local vx = dist
+            local vy = dist
+            if ok_delta and delta then
+                vx = math.max(vx, math.abs(delta.x))
+                vy = math.max(vy, math.abs(delta.y))
+            end
+            abs_drag_cache[b].x = vx
+            abs_drag_cache[b].y = vy
+            return abs_drag_cache[b]
+        end
+    }),
     KeysDown = setmetatable({}, {
         __index = function(_, k)
             if type(k) == "number" then
@@ -2035,6 +2152,12 @@ function mimgui.TreeNodeEx(label, flags, ...)
     end
 end
 
+mimgui.TreeNodeStr = mimgui.TreeNode
+
+function mimgui.TreePop()
+    return ffi.C.igTreePop()
+end
+
 function mimgui.Image(tex, size, uv0, uv1, tint_col, border_col)
     local ref = to_tex_ref(tex)
     local u0 = to_vec2(uv0 or {0, 0})
@@ -2872,12 +2995,33 @@ local function get_cdata_zero(c)
     return c[0]
 end
 
+local function stopScriptOnError(contextName, err)
+    local errMsg = tostring(err or "Unknown error")
+    print(string.format("[mimgui] %s: %s", contextName, errMsg))
+    local s = nil
+    if type(thisScript) == "function" then
+        s = thisScript()
+    end
+    if s then
+        if type(s.die) == "function" then
+            s:die(errMsg)
+        elseif type(s.unload) == "function" then
+            s:unload()
+        end
+    end
+    error(errMsg)
+end
+
 local function evalCond(cond)
     if cond == nil then return true end
     local val = cond
     if type(cond) == "function" then
         local ok, res = pcall(cond)
-        if not ok or res == nil or res == false then return false end
+        if not ok then
+            stopScriptOnError("Error in condition callback", res)
+            return false
+        end
+        if res == nil or res == false then return false end
         val = res
     end
     if type(val) == "cdata" then
@@ -2910,7 +3054,8 @@ function mimgui.__beforeDrawFrame()
             if sub and sub.active and sub.callback then
                 local ok, err = pcall(sub.callback)
                 if not ok and err then
-                    print("[mimgui] Error in OnInitialize callback: " .. tostring(err))
+                    sub.active = false
+                    stopScriptOnError("Error in OnInitialize callback", err)
                 end
             end
         end
@@ -2942,7 +3087,12 @@ function mimgui.__beforeDrawFrame()
             if cond then
                 anyActive = true
                 if sub.before then
-                    pcall(sub.before, sub)
+                    local ok, err = pcall(sub.before, sub)
+                    if not ok and err then
+                        sub.active = false
+                        sub._currentActive = false
+                        stopScriptOnError("Error in before callback", err)
+                    end
                 end
                 if sub.HideCursor == false or (sub.LockPlayer == true and sub.HideCursor ~= true) then
                     showCursor = true
@@ -2971,7 +3121,9 @@ function mimgui.__onDrawFrame()
         if sub and sub.active and sub._currentActive and sub.draw then
             local ok, err = pcall(sub.draw, sub)
             if not ok and err then
-                print("[mimgui] Error in draw callback: " .. tostring(err))
+                sub.active = false
+                sub._currentActive = false
+                stopScriptOnError("Error in draw callback", err)
             end
         end
     end
@@ -3023,6 +3175,18 @@ end
 
 function mimgui.GetScrollY()
     return ffi.C.igGetScrollY()
+end
+
+function mimgui.GetScrollMaxX()
+    return ffi.C.igGetScrollMaxX()
+end
+
+function mimgui.GetScrollMaxY()
+    return ffi.C.igGetScrollMaxY()
+end
+
+function mimgui.SetMouseCursor(cursor_type)
+    return ffi.C.igSetMouseCursor(cursor_type or 0)
 end
 
 function mimgui.GetTime()
@@ -3158,6 +3322,12 @@ end
 local symbol_cache = {}
 
 local function wrap_fn(fn, name)
+    if type(fn) ~= "function" and type(fn) ~= "cdata" then
+        return fn
+    end
+    if type(fn) == "cdata" and not tostring(ffi.typeof(fn)):find("(*)(", 1, true) then
+        return fn
+    end
     return function(...)
         local ok, r1, r2, r3, r4 = pcall(fn, ...)
         if not ok then
@@ -3175,6 +3345,15 @@ local function resolve_symbol(k)
     if enums[k] ~= nil then
         symbol_cache[k] = enums[k]
         return enums[k]
+    end
+
+    -- Check for EnumName_Value pattern (e.g. Cond_Always, WindowFlags_NoResize, Col_Button)
+    local enum_group, enum_val = tostring(k):match("^([^_]+)_(.+)$")
+    if enum_group and enum_val then
+        if enums[enum_group] and enums[enum_group][enum_val] ~= nil then
+            symbol_cache[k] = enums[enum_group][enum_val]
+            return enums[enum_group][enum_val]
+        end
     end
 
     local ok, fn = pcall(function() return ffi.C["ig" .. k] end)
