@@ -42,8 +42,8 @@ local function u8(s)
     return s
 end
 
-M.CURRENT_VERSION = "1.0.14"
-M.CURRENT_BUILD = 114
+M.CURRENT_VERSION = "1.0.15"
+M.CURRENT_BUILD = 115
 M.CURRENT_LIBSTD_VERSION = "1.0.2"
 if __neom_build and type(__neom_build) == "number" then
     M.CURRENT_BUILD = __neom_build
@@ -105,6 +105,8 @@ local function http_get(url)
         headers = {
             ["User-Agent"] = "NeoMLoader-Updater/" .. M.CURRENT_VERSION,
             ["Accept"] = "*/*",
+            ["Cache-Control"] = "no-cache, no-store, must-revalidate",
+            ["Pragma"] = "no-cache",
         },
         sink = ltn12.sink.table(response_body),
     })
@@ -162,9 +164,10 @@ end
 function M.check_update_coroutine(callback)
     M.state = M.STATE_CHECKING
     M.status_message = "Проверка наличия обновлений на сервере..."
-    log_msg("Запрос манифеста: " .. M.MANIFEST_URL)
+    local check_url = M.MANIFEST_URL .. "?nocache=" .. tostring(os.time())
+    log_msg("Запрос манифеста: " .. check_url)
 
-    local manifest_str, err = http_get(M.MANIFEST_URL)
+    local manifest_str, err = http_get(check_url)
     if not manifest_str then
         M.state = M.STATE_ERROR
         M.status_message = "Не удалось получить манифест: " .. tostring(err)
@@ -186,7 +189,10 @@ function M.check_update_coroutine(callback)
     local remote_build = tonumber(manifest.build_number) or 0
     local remote_ver = manifest.version
 
-    M.has_binary_update = (remote_build > M.CURRENT_BUILD) or (remote_build == 0 and remote_ver ~= M.CURRENT_VERSION)
+    log_msg(string.format("Манифест: удалённая сборка %s (v%s) vs локальная сборка %s (v%s)",
+        tostring(remote_build), tostring(remote_ver), tostring(M.CURRENT_BUILD), tostring(M.CURRENT_VERSION)))
+
+    M.has_binary_update = (remote_build > M.CURRENT_BUILD) or (remote_ver ~= M.CURRENT_VERSION)
     M.has_libstd_update = false
     if manifest.libstd and manifest.libstd.version and manifest.libstd.version ~= M.CURRENT_LIBSTD_VERSION then
         M.has_libstd_update = true
