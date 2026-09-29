@@ -42,8 +42,8 @@ local function u8(s)
     return s
 end
 
-M.CURRENT_VERSION = "1.0.15"
-M.CURRENT_BUILD = 115
+M.CURRENT_VERSION = "1.0.16"
+M.CURRENT_BUILD = 116
 M.CURRENT_LIBSTD_VERSION = "1.0.2"
 if __neom_build and type(__neom_build) == "number" then
     M.CURRENT_BUILD = __neom_build
@@ -59,7 +59,49 @@ M.DATA_DIR = "/storage/emulated/0/Android/data/" .. M.PACKAGE_NAME .. "/"
 M.TARGET_BINARY_PATH = M.DATA_DIR .. "libNeoMLoader.so"
 M.BACKUP_BINARY_PATH = M.DATA_DIR .. "libNeoMLoader.so.bak"
 M.CANARY_FLAG_PATH = M.DATA_DIR .. "update_booting.flag"
-M.LIBSTD_DIR = "/sdcard/Android/media/" .. M.PACKAGE_NAME .. "/neomloader/lib/"
+M.MEDIA_DIR = "/sdcard/Android/media/" .. M.PACKAGE_NAME .. "/neomloader/"
+M.LIBSTD_DIR = M.MEDIA_DIR .. "lib/"
+local CONFIG_PATH = M.MEDIA_DIR .. "config/updater.json"
+
+local function parse_version(v)
+    if type(v) ~= "string" then return {0} end
+    local parts = {}
+    for num in v:gmatch("(%d+)") do
+        table.insert(parts, tonumber(num) or 0)
+    end
+    if #parts == 0 then table.insert(parts, 0) end
+    return parts
+end
+
+local function compare_versions(v1_str, v2_str)
+    local p1 = parse_version(v1_str)
+    local p2 = parse_version(v2_str)
+    local max_len = math.max(#p1, #p2)
+    for i = 1, max_len do
+        local n1 = p1[i] or 0
+        local n2 = p2[i] or 0
+        if n1 > n2 then return 1 end
+        if n1 < n2 then return -1 end
+    end
+    return 0
+end
+
+function M.load_config()
+    local cfg = { auto_check = true, check_binary = true, check_libstd = true, disabled = false }
+    local f = io.open(CONFIG_PATH, "r")
+    if f then
+        local content = f:read("*a")
+        f:close()
+        local ok, cjson = pcall(require, "cjson")
+        if ok and cjson then
+            local s, res = pcall(cjson.decode, content)
+            if s and type(res) == "table" then
+                for k, v in pairs(res) do cfg[k] = v end
+            end
+        end
+    end
+    return cfg
+end
 
 M.STATE_IDLE = 0
 M.STATE_CHECKING = 1
@@ -192,10 +234,28 @@ function M.check_update_coroutine(callback)
     log_msg(string.format("Манифест: удалённая сборка %s (v%s) vs локальная сборка %s (v%s)",
         tostring(remote_build), tostring(remote_ver), tostring(M.CURRENT_BUILD), tostring(M.CURRENT_VERSION)))
 
-    M.has_binary_update = (remote_build > M.CURRENT_BUILD) or (remote_ver ~= M.CURRENT_VERSION)
-    M.has_libstd_update = false
-    if manifest.libstd and manifest.libstd.version and manifest.libstd.version ~= M.CURRENT_LIBSTD_VERSION then
-        M.has_libstd_update = true
+    local cfg = M.load_config()
+
+    if cfg.disabled then
+        M.has_binary_update = false
+        M.has_libstd_update = false
+    else
+        if remote_build > 0 and M.CURRENT_BUILD > 0 then
+            M.has_binary_update = (remote_build > M.CURRENT_BUILD)
+        else
+            M.has_binary_update = (compare_versions(tostring(remote_ver), tostring(M.CURRENT_VERSION)) > 0)
+        end
+        if cfg.check_binary == false then
+            M.has_binary_update = false
+        end
+
+        M.has_libstd_update = false
+        if manifest.libstd and manifest.libstd.version then
+            M.has_libstd_update = (compare_versions(tostring(manifest.libstd.version), tostring(M.CURRENT_LIBSTD_VERSION)) > 0)
+        end
+        if cfg.check_libstd == false then
+            M.has_libstd_update = false
+        end
     end
 
     if M.has_binary_update or M.has_libstd_update then
@@ -345,6 +405,11 @@ end
 M.apply_binary_update_coroutine = M.apply_all_updates_coroutine
 
 function M.start_auto_check()
+    local cfg = M.load_config()
+    if cfg.disabled or cfg.auto_check == false then
+        log_msg("Автоматическая проверка обновлений отключена (config/updater.json)")
+        return
+    end
     local co = coroutine.create(function()
         M.check_update_coroutine(function(has_update, data)
             if has_update then

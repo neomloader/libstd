@@ -2014,6 +2014,22 @@ function mimgui.RadioButton(label, arg2, arg3)
 end
 mimgui.RadioButtonIntPtr = ffi.C.igRadioButton_IntPtr
 mimgui.RadioButtonBool = ffi.C.igRadioButton_Bool
+mimgui.RadioButton_IntPtr = ffi.C.igRadioButton_IntPtr
+mimgui.RadioButton_Bool = ffi.C.igRadioButton_Bool
+
+function mimgui.ComboStr(label, current_item, items, popup_max_height_in_items)
+    local pItem = type(current_item) == "cdata" and current_item or ffi.new("int[1]", current_item or 0)
+    local res = ffi.C.igCombo_Str(label, pItem, items, popup_max_height_in_items or -1)
+    if type(current_item) == "table" then current_item[1] = pItem[0] end
+    return res
+end
+mimgui.Combo_Str = mimgui.ComboStr
+
+function mimgui.ComboStr_arr(label, current_item, items, items_count, popup_max_height_in_items)
+    return mimgui.Combo(label, current_item, items, items_count, popup_max_height_in_items)
+end
+mimgui.Combo_Str_arr = mimgui.ComboStr_arr
+mimgui.ComboStrArr = mimgui.ComboStr_arr
 
 function mimgui.Combo(label, current_item, items, items_count, popup_max_height_in_items)
     if type(items) == "table" then
@@ -2027,10 +2043,24 @@ function mimgui.Combo(label, current_item, items, items_count, popup_max_height_
         if type(current_item) == "table" then current_item[1] = pItem[0] end
         return res
     elseif type(items) == "string" then
-        return ffi.C.igCombo_Str(label, current_item, items, popup_max_height_in_items or -1)
+        local max_h = popup_max_height_in_items or (type(items_count) == "number" and items_count) or -1
+        local pItem = type(current_item) == "cdata" and current_item or ffi.new("int[1]", current_item or 0)
+        local res = ffi.C.igCombo_Str(label, pItem, items, max_h)
+        if type(current_item) == "table" then current_item[1] = pItem[0] end
+        return res
     end
     return ffi.C.igCombo_Str_arr(label, current_item, items, items_count or 0, popup_max_height_in_items or -1)
 end
+
+function mimgui.ListBoxStr(label, current_item, items, items_count, height_in_items)
+    return mimgui.ListBox(label, current_item, items, items_count, height_in_items)
+end
+mimgui.ListBox_Str = mimgui.ListBoxStr
+
+function mimgui.ListBoxStr_arr(label, current_item, items, items_count, height_in_items)
+    return mimgui.ListBox(label, current_item, items, items_count, height_in_items)
+end
+mimgui.ListBox_Str_arr = mimgui.ListBoxStr_arr
 
 function mimgui.ListBox(label, current_item, items, items_count, height_in_items)
     if type(items) == "table" then
