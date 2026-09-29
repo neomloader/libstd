@@ -2983,6 +2983,8 @@ function mimgui.OnFrame(arg1, arg2, arg3)
         before = beforeDrawFn,
         draw = drawFn,
         active = true,
+        HideCursor = false,
+        LockPlayer = false,
         Unsubscribe = function(self)
             self.active = false
         end
@@ -3094,7 +3096,7 @@ function mimgui.__beforeDrawFrame()
                         stopScriptOnError("Error in before callback", err)
                     end
                 end
-                if sub.HideCursor == false or (sub.LockPlayer == true and sub.HideCursor ~= true) then
+                if sub.HideCursor ~= true then
                     showCursor = true
                 end
                 if sub.LockPlayer == true then
@@ -3116,6 +3118,8 @@ end
 
 function mimgui.__onDrawFrame()
     local subCount = #subscriptions
+    local showCursor = false
+    local lockPlayer = false
     for i = 1, subCount do
         local sub = subscriptions[i]
         if sub and sub.active and sub._currentActive and sub.draw then
@@ -3125,8 +3129,21 @@ function mimgui.__onDrawFrame()
                 sub._currentActive = false
                 stopScriptOnError("Error in draw callback", err)
             end
+            if sub.HideCursor ~= true then
+                showCursor = true
+            end
+            if sub.LockPlayer == true then
+                lockPlayer = true
+            end
         end
     end
+    if mimgui.ShowCursor ~= nil then
+        showCursor = (mimgui.ShowCursor == true)
+    end
+    if mimgui.LockPlayer ~= nil then
+        lockPlayer = (mimgui.LockPlayer == true)
+    end
+    return showCursor, lockPlayer
 end
 
 function mimgui.PushID(id)

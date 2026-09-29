@@ -42,8 +42,8 @@ local function u8(s)
     return s
 end
 
-M.CURRENT_VERSION = "1.0.12"
-M.CURRENT_BUILD = 112
+M.CURRENT_VERSION = "1.0.13"
+M.CURRENT_BUILD = 113
 M.CURRENT_LIBSTD_VERSION = "1.0.2"
 if __neom_build and type(__neom_build) == "number" then
     M.CURRENT_BUILD = __neom_build
