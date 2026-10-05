@@ -110,6 +110,13 @@ local function BeginPiePopup(menuCtx, pName, iMouseButton)
 			if menuCtx.m_iLastFrame < (iCurrentFrame - 1) then
 				menuCtx.m_iOpenFrame = iCurrentFrame
 				menuCtx.m_bClose = false
+				for i = 0, menuCtx.c_iMaxPieMenuStack - 1 do
+					local pm = menuCtx.m_oPieMenuStack[i]
+					if pm then
+						pm.m_iHoveredItem = -1
+						pm.m_iLastHoveredItem = -1
+					end
+				end
 				local io = imgui.GetIO()
 				local clickPos = io.MouseClickedPos and io.MouseClickedPos[0]
 				local mp = io.MousePos
@@ -183,7 +190,7 @@ local function EndPiePopup(menuCtx)
 					end
 					if drag_angle >= item_inner_ang_min and drag_angle < item_inner_ang_max  then
 						hovered = true
-						bItemHovered = not oPieMenu.m_oItemIsSubMenu[ item_n ]
+						bItemHovered = true
 					end
 				end
 
@@ -242,6 +249,8 @@ local function EndPiePopup(menuCtx)
 			oPieMenu.m_fLastMaxItemSqrDiameter = oPieMenu.m_fMaxItemSqrDiameter
 			if fDragDistSqr >= fMaxRadius * fMaxRadius then
 				item_hovered = oPieMenu.m_iLastHoveredItem
+			elseif fDragDistSqr >= fMinRadius * fMinRadius then
+				bItemHovered = true
 			end
 			oPieMenu.m_iHoveredItem = item_hovered
 			oPieMenu.m_iLastHoveredItem = item_hovered
@@ -249,6 +258,9 @@ local function EndPiePopup(menuCtx)
 			if item_hovered == -1 or not oPieMenu.m_oItemIsSubMenu[item_hovered] then
 				break
 			end
+		end
+		if fDragDistSqr < fCurrentRadius * fCurrentRadius then
+			bItemHovered = true
 		end
 		pDrawList:PopClipRect()
 		if oArea.Min.x < 0  then
@@ -269,7 +281,7 @@ local function EndPiePopup(menuCtx)
 		local isReleased = imgui.IsMouseReleased(0) or (menuCtx.m_iMouseButton and imgui.IsMouseReleased(menuCtx.m_iMouseButton))
 		local isClicked = imgui.IsMouseClicked(0) or (menuCtx.m_iMouseButton and imgui.IsMouseClicked(menuCtx.m_iMouseButton))
 		local curFrame = imgui.GetFrameCount()
-		if menuCtx.m_bClose or (menuCtx.m_iOpenFrame and curFrame > menuCtx.m_iOpenFrame + 2 and not bItemHovered and (isClicked or isReleased)) then
+		if menuCtx.m_bClose or (menuCtx.m_iOpenFrame and curFrame > menuCtx.m_iOpenFrame + 5 and not bItemHovered and (isClicked or isReleased)) then
 			imgui.CloseCurrentPopup()
 		end
 	end)
@@ -298,12 +310,13 @@ local function BeginPieMenu(menuCtx, pName, bEnabled)
 	end
 	oPieMenu.m_oItemIsSubMenu[oPieMenu.m_iCurrentIndex] = true
 	oPieMenu.m_oItemNames[oPieMenu.m_iCurrentIndex] = pName
-	if oPieMenu.m_iLastHoveredItem == oPieMenu.m_iCurrentIndex then
-		oPieMenu.m_iCurrentIndex = oPieMenu.m_iCurrentIndex + 1
+	local itemIdx = oPieMenu.m_iCurrentIndex
+	if oPieMenu.m_iLastHoveredItem == itemIdx or oPieMenu.m_iHoveredItem == itemIdx then
+		oPieMenu.m_iCurrentIndex = itemIdx + 1
 		BeginPieMenuEx(menuCtx)
 		return true
 	end
-	oPieMenu.m_iCurrentIndex = oPieMenu.m_iCurrentIndex + 1
+	oPieMenu.m_iCurrentIndex = itemIdx + 1
 	return false
 end
 
@@ -330,9 +343,12 @@ local function PieMenuItem(menuCtx, pName, bEnabled)
 	oPieMenu.m_oItemIsSubMenu[oPieMenu.m_iCurrentIndex] = false
 	oPieMenu.m_oItemNames[oPieMenu.m_iCurrentIndex] = pName
 	local isReleased = imgui.IsMouseReleased(0) or (menuCtx.m_iMouseButton and imgui.IsMouseReleased(menuCtx.m_iMouseButton))
+	local isClicked = imgui.IsMouseClicked(0)
 	local curFrame = imgui.GetFrameCount()
-	local bActive = (oPieMenu.m_iCurrentIndex == oPieMenu.m_iHoveredItem) and isReleased and (curFrame > (menuCtx.m_iOpenFrame or 0))
-	oPieMenu.m_iCurrentIndex = oPieMenu.m_iCurrentIndex + 1
+	local itemIdx = oPieMenu.m_iCurrentIndex
+	local isHovered = (itemIdx == oPieMenu.m_iHoveredItem) or (itemIdx == oPieMenu.m_iLastHoveredItem)
+	local bActive = isHovered and (isReleased or isClicked) and (curFrame > (menuCtx.m_iOpenFrame or 0) + 2)
+	oPieMenu.m_iCurrentIndex = itemIdx + 1
 	if bActive then
 		menuCtx.m_bClose = true
 	end
