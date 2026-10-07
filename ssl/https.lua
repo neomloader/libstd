@@ -69,8 +69,13 @@ local function tcp(params)
 
       function conn:connect(host, port)
          try(self.sock:connect(host, port))
-         self.sock = try(ssl.wrap(self.sock, params))
-         self.sock:sni(host)
+         local ssl_params = {}
+         for k, v in pairs(params) do ssl_params[k] = v end
+         ssl_params.server_name = ssl_params.server_name or host
+         self.sock = try(ssl.wrap(self.sock, ssl_params))
+         if self.sock.sni then
+            self.sock:sni(host)
+         end
          self.sock:settimeout(_M.TIMEOUT)
          try(self.sock:dohandshake())
          reg(self)
@@ -90,8 +95,6 @@ local function request(url, body)
   end
   if http.PROXY or url.proxy then
     return nil, "proxy not supported"
-  elseif url.redirect then
-    return nil, "redirect not supported"
   elseif url.create then
     return nil, "create function not permitted"
   end

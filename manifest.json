@@ -1,6 +1,6 @@
 {
   "version": "1.0.2",
-  "updated_at": "2026-10-05T21:54:28.201444+00:00",
+  "updated_at": "2026-10-07T19:03:17.577207+00:00",
   "total_files": 116,
   "files": {
     "LIP.lua": {
@@ -100,8 +100,8 @@
       "size": 3008
     },
     "requests.lua": {
-      "sha256": "2b81fbfbfc0cc56f5499568097e5dc875a380134e793f222d79de336508e3625",
-      "size": 8203
+      "sha256": "27c2b585261fff9513261bd8fee618ab7f9e50a009bea454f5dff3ac311e88b4",
+      "size": 10751
     },
     "sampfuncs.lua": {
       "sha256": "3fa175e4270cf9179434955673c1d6f98a22a8b3acd012529325d2fc869594a9",
@@ -284,8 +284,8 @@
       "size": 6717
     },
     "ssl/https.lua": {
-      "sha256": "cda05b8aa177b2e20ec415d5c42a551dbf992104d66b57999fc20adec9a143b0",
-      "size": 2684
+      "sha256": "d2a3268ee474ca704d3d9a38ef24998228909899e5186d910d84b18b2f85d9f7",
+      "size": 2823
     },
     "webviews/WebViews.jar": {
       "sha256": "efc8da68dedaa46fda59534cf097f11c26a928e5466739b3bfc21bc87a7a232a",

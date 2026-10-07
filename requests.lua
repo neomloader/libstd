@@ -83,54 +83,109 @@ function requests.request(method, url, args)
 end
 
 function _requests.make_request(request)
-  local response_body = {}
-  local full_request = {
-    method = request.method,
-    url = request.url,
-    headers = request.headers,
-    source = ltn12.source.string(request.data),
-    sink = ltn12.sink.table(response_body),
-    redirect = request.allow_redirects,
-    proxy = request.proxy
-  }
-
-  local response = {}
-  local ok
-  local want_https = string.find(full_request.url, '^https:') ~= nil
-  local socket
-
-  if not want_https or request.proxy then
-
-    socket = requests.http_socket
-  elseif want_https and not https_socket then
-
-    full_request.url = string.gsub(full_request.url, '^https:', 'http:', 1)
-    socket = requests.http_socket
-  else
-
-    socket = requests.https_socket
+  local max_redirects = request.max_redirects or 5
+  local allow_redirects = (request.allow_redirects ~= false)
+  local current_url = request.url
+  local current_method = request.method or "GET"
+  local current_data = request.data or ""
+  local current_headers = {}
+  if request.headers then
+    for k, v in pairs(request.headers) do
+      current_headers[k] = v
+    end
   end
 
-  if not socket then
-    error('no HTTP transport available for '..request.url)
-  end
+  local history = {}
+  local redirect_count = 0
 
-  local transport_error
-  ok, response.status_code, response.headers, response.status = socket.request(full_request)
-  if not ok then
-    transport_error = response.status_code or response.status or 'unknown transport error'
-    error('error in '..request.method..' request: '..tostring(transport_error))
-  end
+  while true do
+    local response_body = {}
+    local full_request = {
+      method = current_method,
+      url = current_url,
+      headers = current_headers,
+      source = (current_data ~= "" and ltn12.source.string(current_data)) or nil,
+      sink = ltn12.sink.table(response_body),
+      redirect = false,
+      proxy = request.proxy
+    }
 
-  response.status_code = response.status_code or 0
-  response.headers = response.headers or {}
-  response.text = table.concat(response_body)
-  response.json = function () return json.decode(response.text) end
-  if xml ~= nil then
-    response.xml = function () return xml.load(response.text) end
-  end
+    local want_https = string.find(current_url, '^https:') ~= nil
+    local socket
 
-  return response
+    if not want_https or request.proxy then
+      socket = requests.http_socket
+    elseif want_https and not requests.https_socket then
+      full_request.url = string.gsub(current_url, '^https:', 'http:', 1)
+      socket = requests.http_socket
+    else
+      socket = requests.https_socket
+    end
+
+    if not socket then
+      error('no HTTP transport available for '..current_url)
+    end
+
+    local ok, status_code, headers, status = socket.request(full_request)
+    if not ok then
+      local transport_error = status_code or status or 'unknown transport error'
+      error('error in '..current_method..' request: '..tostring(transport_error))
+    end
+
+    local response = {
+      status_code = status_code or 0,
+      headers = headers or {},
+      status = status or ""
+    }
+
+    local code = response.status_code
+    local location = response.headers and (response.headers.location or response.headers.Location)
+
+    if allow_redirects and location and (code == 301 or code == 302 or code == 303 or code == 307 or code == 308) and redirect_count < max_redirects then
+      redirect_count = redirect_count + 1
+      table.insert(history, {
+        url = current_url,
+        status_code = code,
+        headers = response.headers
+      })
+
+      current_url = url_parser.absolute(current_url, location)
+
+      if code == 303 or ((code == 301 or code == 302) and current_method ~= "HEAD") then
+        current_method = "GET"
+        current_data = ""
+        current_headers["Content-Length"] = nil
+        current_headers["content-length"] = nil
+        current_headers["Content-Type"] = nil
+        current_headers["content-type"] = nil
+      end
+
+      current_headers["Host"] = nil
+      current_headers["host"] = nil
+
+      local set_cookie = response.headers["set-cookie"] or response.headers["Set-Cookie"]
+      if set_cookie then
+        if current_headers["Cookie"] then
+          current_headers["Cookie"] = current_headers["Cookie"] .. "; " .. set_cookie
+        else
+          current_headers["Cookie"] = set_cookie
+        end
+      end
+    else
+      response.text = table.concat(response_body)
+      response.url = current_url
+      response.history = history
+      response.ok = (response.status_code >= 200 and response.status_code < 400)
+      response.json = function()
+        if not response.text or #response.text == 0 then return nil end
+        return json.decode(response.text)
+      end
+      if xml ~= nil then
+        response.xml = function() return xml.load(response.text) end
+      end
+      return response
+    end
+  end
 end
 
 function _requests.parse_args(request)
@@ -175,7 +230,26 @@ end
 
 function _requests.create_header(request)
   request.headers = request.headers or {}
-  request.headers['Content-Length'] = request.data:len()
+
+  local has_ua = false
+  local has_accept = false
+  for k, _ in pairs(request.headers) do
+    local lk = string.lower(k)
+    if lk == 'user-agent' then has_ua = true end
+    if lk == 'accept' then has_accept = true end
+  end
+
+  if not has_ua then
+    request.headers['User-Agent'] = 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 NeoMLoader/1.0'
+  end
+
+  if not has_accept then
+    request.headers['Accept'] = '*/*'
+  end
+
+  if request.data and #request.data > 0 then
+    request.headers['Content-Length'] = #request.data
+  end
 
   if request.cookies then
     if request.headers.cookie then
@@ -199,9 +273,10 @@ function _requests.check_data(request)
 end
 
 function _requests.check_timeout(timeout)
-  requests.http_socket.TIMEOUT = timeout or 5
+  local t = timeout or 15
+  requests.http_socket.TIMEOUT = t
   if requests.https_socket ~= nil then
-    requests.https_socket.TIMEOUT = timeout or 5
+    requests.https_socket.TIMEOUT = t
   end
 end
 
