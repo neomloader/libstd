@@ -40,7 +40,7 @@ function M.FindClass(class, cldr)
     local clazz = env.CallObjectMethod_safe(
         cldr,
         M.loadClassMethodId,
-        env.NewStringUTF(class)
+        classStr
     )
 
     M.classCache[class] = ffi.cast('jclass', env.NewGlobalRef(clazz))

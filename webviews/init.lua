@@ -24,10 +24,26 @@ function toboolean(num) return num > 0 end
 
 local async = {}
 function webviews.setClickableAsync(id, bool) if bool then table.insert(async, id) else for i, value in ipairs(async) do if value == id then table.remove(async, i) end end end end
-function webviews.createBrowserFromFile(id, file) envu.CallStaticVoidMethod(class, "createBrowserFromFile", "(ILjava/lang/String;)V", ffi.cast("jint", id), env.NewStringUTF(file)) end
-function webviews.createBrowser(id, url) envu.CallStaticVoidMethod(class, "createBrowser", "(ILjava/lang/String;)V", ffi.cast("jint", id), env.NewStringUTF(url)) end
-function webviews.executeJS(id, msg) envu.CallStaticVoidMethod(class, "executeJS", "(ILjava/lang/String;)V", ffi.cast("jint", id), env.NewStringUTF(msg)) end
-function webviews.changeUrl(id, url) envu.CallStaticVoidMethod(class, "changeUrl", "(ILjava/lang/String;)V", ffi.cast("jint", id), env.NewStringUTF(url)) end
+function webviews.createBrowserFromFile(id, file)
+    local jstr = env.NewStringUTF(file)
+    envu.CallStaticVoidMethod(class, "createBrowserFromFile", "(ILjava/lang/String;)V", ffi.cast("jint", id), jstr)
+    env.DeleteLocalRef(jstr)
+end
+function webviews.createBrowser(id, url)
+    local jstr = env.NewStringUTF(url)
+    envu.CallStaticVoidMethod(class, "createBrowser", "(ILjava/lang/String;)V", ffi.cast("jint", id), jstr)
+    env.DeleteLocalRef(jstr)
+end
+function webviews.executeJS(id, msg)
+    local jstr = env.NewStringUTF(msg)
+    envu.CallStaticVoidMethod(class, "executeJS", "(ILjava/lang/String;)V", ffi.cast("jint", id), jstr)
+    env.DeleteLocalRef(jstr)
+end
+function webviews.changeUrl(id, url)
+    local jstr = env.NewStringUTF(url)
+    envu.CallStaticVoidMethod(class, "changeUrl", "(ILjava/lang/String;)V", ffi.cast("jint", id), jstr)
+    env.DeleteLocalRef(jstr)
+end
 function webviews.setClickable(id, bool)
     local args = ffi.new("jvalue[2]")
     args[0].i = id
@@ -58,8 +74,16 @@ function webviews.setSize(id, x, y)
 end
 function webviews.deleteBrowser(id) envu.CallStaticVoidMethod(class, "deleteBrowser", "(I)V", ffi.cast("jint", id)) end
 function webviews.showCloseButton(id, bool) envu.CallStaticVoidMethod(class, "showCloseButton", "(IZ)V", ffi.cast("jint", id), bool) end
-function webviews.setSetting(id, name, bool) envu.CallStaticVoidMethod(class, "setSetting", "(ILjava/lang/String;Z)V", ffi.cast("jint", id), env.NewStringUTF(name), bool) end
-function webviews.addLog(log) envu.CallStaticVoidMethod(class, "addLog", "(Ljava/lang/String;)V", env.NewStringUTF(log)) end
+function webviews.setSetting(id, name, bool)
+    local jstr = env.NewStringUTF(name)
+    envu.CallStaticVoidMethod(class, "setSetting", "(ILjava/lang/String;Z)V", ffi.cast("jint", id), jstr, bool)
+    env.DeleteLocalRef(jstr)
+end
+function webviews.addLog(log)
+    local jstr = env.NewStringUTF(log)
+    envu.CallStaticVoidMethod(class, "addLog", "(Ljava/lang/String;)V", jstr)
+    env.DeleteLocalRef(jstr)
+end
 function webviews.sendClick(id, type, clickid, x, y) envu.CallStaticVoidMethod(class, "sendClick", "(IIIII)V", ffi.cast("jint", id), ffi.cast("jint", type), ffi.cast("jint", clickid), ffi.cast("jint", x), ffi.cast("jint", y)) end
 function webviews.resetPort() return envu.CallStaticIntMethod(class, "resetUDPPort", "()I") end
 function webviews.getPort() return envu.CallStaticIntMethod(class, "getUDPPort", "()I") end
@@ -67,12 +91,46 @@ function webviews.canGoForward(id) return toboolean(envu.CallStaticBooleanMethod
 function webviews.canGoBack(id) return toboolean(envu.CallStaticBooleanMethod(class, "goPage", "(IZZ)Z", ffi.cast("jint", id), false, true)) end
 function webviews.goForward(id) return toboolean(envu.CallStaticBooleanMethod(class, "goPage", "(IZZ)Z", ffi.cast("jint", id), true, false)) end
 function webviews.goBack(id) return toboolean(envu.CallStaticBooleanMethod(class, "goPage", "(IZZ)Z", ffi.cast("jint", id), false, false)) end
-function webviews.getJSValue(id, msg) return envu.FromJString(envu.CallStaticObjectMethod(class, "getJSValue", "(ILjava/lang/String;)Ljava/lang/String;", ffi.cast("jint", id), env.NewStringUTF(msg))) end
+function webviews.getJSValue(id, msg)
+    local jstr = env.NewStringUTF(msg)
+    local jobj = envu.CallStaticObjectMethod(class, "getJSValue", "(ILjava/lang/String;)Ljava/lang/String;", ffi.cast("jint", id), jstr)
+    env.DeleteLocalRef(jstr)
+    if jobj ~= nil then
+        local res = envu.FromJString(jobj)
+        env.DeleteLocalRef(jobj)
+        return res
+    end
+    return nil
+end
 function webviews.getStatus(id) return toboolean(envu.CallStaticBooleanMethod(class, "getStatus", "(I)Z", ffi.cast("jint", id))) end
-function webviews.getVersion() return cjson.decode(envu.FromJString(envu.CallStaticObjectMethod(class, "getVersion", "()Ljava/lang/String;"))) end
-function webviews.getBrowsers() return cjson.decode(envu.FromJString(envu.CallStaticObjectMethod(class, "getBrowsers", "()Ljava/lang/String;"))) end
+function webviews.getVersion()
+    local jobj = envu.CallStaticObjectMethod(class, "getVersion", "()Ljava/lang/String;")
+    if jobj ~= nil then
+        local str = envu.FromJString(jobj)
+        env.DeleteLocalRef(jobj)
+        return cjson.decode(str)
+    end
+    return nil
+end
+function webviews.getBrowsers()
+    local jobj = envu.CallStaticObjectMethod(class, "getBrowsers", "()Ljava/lang/String;")
+    if jobj ~= nil then
+        local str = envu.FromJString(jobj)
+        env.DeleteLocalRef(jobj)
+        return cjson.decode(str)
+    end
+    return nil
+end
 function webviews.getBrowser(id) return envu.CallStaticObjectMethod(class, "getBrowser", "(I)LWebViews/TransparentWebView;", ffi.cast("jint", id)) end
-function webviews.getScreen(id) return envu.FromJString(envu.CallStaticObjectMethod(class, "getScreen", "(I)Ljava/lang/String;", ffi.cast("jint", id))) end
+function webviews.getScreen(id)
+    local jobj = envu.CallStaticObjectMethod(class, "getScreen", "(I)Ljava/lang/String;", ffi.cast("jint", id))
+    if jobj ~= nil then
+        local str = envu.FromJString(jobj)
+        env.DeleteLocalRef(jobj)
+        return str
+    end
+    return nil
+end
 function webviews.onAction(action) return action end
 local udpCallback
 

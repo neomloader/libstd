@@ -1,6 +1,6 @@
 {
   "version": "1.0.2",
-  "updated_at": "2026-10-08T16:57:51.718416+00:00",
+  "updated_at": "2026-10-08T20:49:40.798910+00:00",
   "total_files": 116,
   "files": {
     "LIP.lua": {
@@ -292,8 +292,8 @@
       "size": 18802
     },
     "webviews/init.lua": {
-      "sha256": "733fb76b98b582cf6249a729741e833b0236705c4dedd49e5dad91c7b61e42c4",
-      "size": 6281
+      "sha256": "3e33344e73ef5c15c36affb81ffb97270404166c69e6363d73ff3affd94fc852",
+      "size": 7198
     },
     "android/arizona.lua": {
       "sha256": "1419c651e2be2ccacfe53f8fa3c0db578b1481377ae5fea1136d2fc6bf6b8e22",
@@ -304,8 +304,8 @@
       "size": 25135
     },
     "android/jnienv-util.lua": {
-      "sha256": "dfd7645d1becedeff2ded020ee4f45cbc7b8dd2b3e99df2f6f7a642cb855c5a3",
-      "size": 14774
+      "sha256": "d0b6f471af0468a5b2682147aa4a8079444f02bba7811458ea821352bee0b826",
+      "size": 14759
     },
     "android/jnienv.lua": {
       "sha256": "b512d3103917a9f0dee131ebd421bce4ac9438f852151117fd0debeb99f0fdcd",
