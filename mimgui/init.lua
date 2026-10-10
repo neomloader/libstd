@@ -686,8 +686,44 @@ local ImDrawList_methods = {
         local r = ffi.C.ImDrawList_PathLineTo(self, to_vec2(pos))
         return r
     end,
+    PathLineToMergeDuplicate = function(self, pos)
+        local r = ffi.C.ImDrawList_PathLineToMergeDuplicate(self, to_vec2(pos))
+        return r
+    end,
+    PathFillConvex = function(self, col)
+        local r = ffi.C.ImDrawList_PathFillConvex(self, to_u32_color(col))
+        return r
+    end,
+    PathFillConcave = function(self, col)
+        local r = ffi.C.ImDrawList_PathFillConcave(self, to_u32_color(col))
+        return r
+    end,
     PathStroke = function(self, col, flags, thickness)
         local r = ffi.C.ImDrawList_PathStroke(self, to_u32_color(col), flags or 0, thickness or 1.0)
+        return r
+    end,
+    PathArcTo = function(self, center, radius, a_min, a_max, num_segments)
+        local r = ffi.C.ImDrawList_PathArcTo(self, to_vec2(center), radius, a_min, a_max, num_segments or 0)
+        return r
+    end,
+    PathArcToFast = function(self, center, radius, a_min_of_12, a_max_of_12)
+        local r = ffi.C.ImDrawList_PathArcToFast(self, to_vec2(center), radius, a_min_of_12, a_max_of_12)
+        return r
+    end,
+    PathEllipticalArcTo = function(self, center, radius, rot, a_min, a_max, num_segments)
+        local r = ffi.C.ImDrawList_PathEllipticalArcTo(self, to_vec2(center), to_vec2(radius), rot or 0.0, a_min, a_max, num_segments or 0)
+        return r
+    end,
+    PathBezierCubicCurveTo = function(self, p2, p3, p4, num_segments)
+        local r = ffi.C.ImDrawList_PathBezierCubicCurveTo(self, to_vec2(p2), to_vec2(p3), to_vec2(p4), num_segments or 0)
+        return r
+    end,
+    PathBezierQuadraticCurveTo = function(self, p2, p3, num_segments)
+        local r = ffi.C.ImDrawList_PathBezierQuadraticCurveTo(self, to_vec2(p2), to_vec2(p3), num_segments or 0)
+        return r
+    end,
+    PathRect = function(self, rect_min, rect_max, rounding, flags)
+        local r = ffi.C.ImDrawList_PathRect(self, to_vec2(rect_min), to_vec2(rect_max), rounding or 0.0, flags or 0)
         return r
     end,
     PushClipRect = function(self, clip_rect_min, clip_rect_max, intersect_with_current_clip_rect)
@@ -3341,13 +3377,21 @@ function mimgui.BulletText(fmt, ...)
 end
 
 function mimgui.GetClipboardText()
+    if getClipboardText then
+        local ok, res = pcall(getClipboardText)
+        if ok and res and res ~= "" then return res end
+    end
     local str = ffi.C.igGetClipboardText()
     if str ~= nil and str ~= ffi.null then return ffi.string(str) end
     return ""
 end
 
 function mimgui.SetClipboardText(text)
-    return ffi.C.igSetClipboardText(tostring(text or ""))
+    local s = tostring(text or "")
+    if setClipboardText then
+        pcall(setClipboardText, s)
+    end
+    return ffi.C.igSetClipboardText(s)
 end
 
 function mimgui.SetWindowPosStr(name, pos, cond)

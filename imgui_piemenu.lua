@@ -383,4 +383,9 @@ end
 
 local defaultPieMenu = New()
 defaultPieMenu.New = New
+defaultPieMenu._VERSION = '2.0.0'
+defaultPieMenu.meta = {
+	VERSION = 2000,
+	VERSION_STR = '2.0.0',
+}
 return defaultPieMenu
