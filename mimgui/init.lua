@@ -1927,12 +1927,12 @@ function mimgui.GetFrameRate()
     return 60.0
 end
 
-function mimgui.PushStyleColor(idx, col)
+function mimgui.PushStyleColor(idx, col, ...)
     if type(idx) == "string" then
         idx = enums.Col[idx] or 0
     end
     idx = idx or 0
-    return ffi.C.igPushStyleColor_Vec4(idx, to_vec4(col))
+    return ffi.C.igPushStyleColor_Vec4(idx, to_vec4(col, ...))
 end
 
 function mimgui.PopStyleColor(count)
@@ -3354,9 +3354,30 @@ function mimgui.TextUnformatted(text)
     return ffi.C.igTextUnformatted(text, ffi.null)
 end
 
-function mimgui.TextColored(col, fmt, ...)
-    local s = format_text(fmt, ...)
-    ffi.C.igPushStyleColor_Vec4(enums.Col.Text, to_vec4(col))
+function mimgui.TextColored(...)
+    local n = select("#", ...)
+    local col, s
+    if n >= 5 and type(select(1, ...)) == "number" and type(select(2, ...)) == "number" and type(select(3, ...)) == "number" and type(select(4, ...)) == "number" then
+        local r, g, b, a = select(1, ...), select(2, ...), select(3, ...), select(4, ...)
+        col = to_vec4(r, g, b, a)
+        local fmt = select(5, ...)
+        if n > 5 then
+            local args = { select(6, ...) }
+            s = format_text(fmt, unpack(args))
+        else
+            s = format_text(fmt)
+        end
+    else
+        col = to_vec4(select(1, ...))
+        local fmt = select(2, ...)
+        if n > 2 then
+            local args = { select(3, ...) }
+            s = format_text(fmt, unpack(args))
+        else
+            s = format_text(fmt)
+        end
+    end
+    ffi.C.igPushStyleColor_Vec4(enums.Col.Text, col)
     ffi.C.igTextUnformatted(s, ffi.null)
     ffi.C.igPopStyleColor(1)
 end
