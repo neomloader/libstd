@@ -2517,7 +2517,17 @@ end
 mimgui.CreateTextureFromFileInMemory = mimgui.CreateTextureFromMemory
 
 function mimgui.ReleaseTexture(texture)
-    ffi.C.neom_mimgui_release_texture(texture)
+    if not texture then return end
+    if type(texture) == "number" then
+        ffi.C.neom_mimgui_release_texture(texture)
+    elseif type(texture) == "cdata" then
+        local ok, val = pcall(function() return tonumber(ffi.cast("uintptr_t", texture)) end)
+        if ok and val then
+            ffi.C.neom_mimgui_release_texture(val)
+        else
+            ffi.C.neom_mimgui_release_texture(texture)
+        end
+    end
 end
 
 function mimgui.SwitchContext()
