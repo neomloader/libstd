@@ -17,7 +17,7 @@ _M.PORT = 80
 _M.USERAGENT = socket._VERSION
 
 _M.SSLPORT = 443
-_M.SSLPROTOCOL = "tlsv1_2"
+_M.SSLPROTOCOL = "any"
 _M.SSLOPTIONS  = "all"
 _M.SSLVERIFY   = "none"
 _M.SSLSNISTRICT = false

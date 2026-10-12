@@ -930,7 +930,7 @@ end
 local function _doTick (co, skt, ...)
   if not co then return end
 
-  if _canceled[co] then
+  if _canceled[co] or coroutine_status(co) == "dead" then
     _canceled[co] = nil
     _threads[co] = nil
     return
