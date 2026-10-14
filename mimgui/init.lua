@@ -268,8 +268,15 @@ ImColor = ffi.metatype("ImColor", ImColor_mt)
 
 local imcolor_ct = ffi.typeof("ImColor")
 
-local function to_vec4(v)
+local function to_vec4(v, g, b, a)
     if v == nil then return ImVec4(0, 0, 0, 0) end
+    if g ~= nil and b ~= nil then
+        local rx = tonumber(v) or 0
+        local ry = tonumber(g) or 0
+        local rz = tonumber(b) or 0
+        local rw = tonumber(a) or 1
+        return ImVec4(rx, ry, rz, rw)
+    end
     if ffi.istype(imvec4_ct, v) then return v end
     if ffi.istype(imcolor_ct, v) then return v.Value end
     if type(v) == "table" then
