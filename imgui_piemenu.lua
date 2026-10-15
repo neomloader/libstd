@@ -1,11 +1,19 @@
 local ffi = require 'ffi'
 local imgui = require 'mimgui'
-local vmajor, vminor, vpatch = string.match(imgui._VERSION, '(%d+)%.(%d+)%.(%d+)')
+local vmajor, vminor, vpatch = string.match(imgui._VERSION or "1.89.0", '(%d+)%.(%d+)%.(%d+)')
 local ImVec2 = imgui.ImVec2
 local ImVec4 = imgui.ImVec4
 local ImColor = imgui.ImColor
 
-local function ImRectAdd(rect, rhs)
+local function toScreenPoint(x, y)
+	if imgui.ScreenPoint then
+		local ok, pt = pcall(imgui.ScreenPoint, x, y)
+		if ok and pt then return pt end
+	end
+	return ImVec2(x, y)
+end
+
+function ImRectAdd(rect, rhs)
 	local Min, Max = rect.Min, rect.Max
 	if Min.x > rhs.x then Min.x = rhs.x end
 	if Min.y > rhs.y then Min.y = rhs.y end
@@ -13,7 +21,7 @@ local function ImRectAdd(rect, rhs)
 	if Max.y < rhs.y then Max.y = rhs.y end
 end
 
-local function NewPieMenu(context)
+function NewPieMenu(context)
 	local obj = {
 		m_iCurrentIndex = 0,
 		m_fMaxItemSqrDiameter = 0,
@@ -28,12 +36,13 @@ local function NewPieMenu(context)
 	return obj
 end
 
-local function NewPieMenuContext(MaxPieMenuStack, MaxPieItemCount, RadiusEmpty, RadiusMin, MinItemCount, MinItemCountPerLevel)
+function NewPieMenuContext(MaxPieMenuStack, MaxPieItemCount, RadiusEmpty, RadiusMin, MinItemCount, MinItemCountPerLevel)
+	local dpi = MONET_DPI_SCALE or 1
 	local obj = {
 		c_iMaxPieMenuStack = MaxPieMenuStack or 8,
 		c_iMaxPieItemCount = MaxPieItemCount or 12,
-		c_iRadiusEmpty = RadiusEmpty or (30 * (MONET_DPI_SCALE or 1)),
-		c_iRadiusMin = RadiusMin or (30 * (MONET_DPI_SCALE or 1)),
+		c_iRadiusEmpty = RadiusEmpty or (39 * dpi),
+		c_iRadiusMin = RadiusMin or (39 * dpi),
 		c_iMinItemCount = MinItemCount or 3,
 		c_iMinItemCountPerLevel = MinItemCountPerLevel or 3,
 
@@ -51,7 +60,14 @@ local function NewPieMenuContext(MaxPieMenuStack, MaxPieItemCount, RadiusEmpty, 
 	return obj
 end
 
-local function BeginPieMenuEx(menuCtx)
+local defaultContext = NewPieMenuContext()
+
+local function isContext(t)
+	return type(t) == "table" and t.m_oPieMenuStack ~= nil
+end
+
+function BeginPieMenuEx(menuCtx)
+	menuCtx = isContext(menuCtx) and menuCtx or defaultContext
 	if menuCtx.m_iCurrentIndex >= menuCtx.c_iMaxPieMenuStack - 1 then
 		menuCtx.m_iCurrentIndex = menuCtx.c_iMaxPieMenuStack - 2
 	end
@@ -73,13 +89,30 @@ local function BeginPieMenuEx(menuCtx)
 	end
 end
 
-local function EndPieMenuEx(menuCtx)
+function EndPieMenuEx(menuCtx)
+	menuCtx = isContext(menuCtx) and menuCtx or defaultContext
 	if menuCtx.m_iCurrentIndex >= 0 then
 		menuCtx.m_iCurrentIndex = menuCtx.m_iCurrentIndex - 1
 	end
 end
 
-local function BeginPiePopup(menuCtx, pName, iMouseButton)
+function BeginPiePopup(a1, a2, a3)
+	local menuCtx, pName, iMouseButton
+	if isContext(a1) then
+		menuCtx = a1
+		pName = tostring(a2 or "PieMenu")
+		iMouseButton = a3
+	else
+		menuCtx = defaultContext
+		if type(a1) == "string" then
+			pName = a1
+			iMouseButton = a2
+		else
+			pName = tostring(a2 or "PieMenu")
+			iMouseButton = a3
+		end
+	end
+
 	iMouseButton = iMouseButton or 0
 	if imgui.IsPopupOpen(pName) then
 		imgui.PushStyleColor(imgui.Col.WindowBg, ImVec4(0, 0, 0, 0))
@@ -93,12 +126,12 @@ local function BeginPiePopup(menuCtx, pName, iMouseButton)
 		local itemMin = imgui.GetItemRectMin()
 		local itemMax = imgui.GetItemRectMax()
 		if itemMin and itemMax and itemMax.x > itemMin.x and itemMax.y > itemMin.y and itemMin.x > 0 and itemMin.y > 0 then
-			defaultCenter = ImVec2((itemMin.x + itemMax.x) * 0.5, (itemMin.y + itemMax.y) * 0.5)
+			defaultCenter = toScreenPoint((itemMin.x + itemMax.x) * 0.5, (itemMin.y + itemMax.y) * 0.5)
 		else
 			local wpos = imgui.GetWindowPos()
 			local wsz = imgui.GetWindowSize()
 			if wpos and wsz and wsz.x > 0 and wsz.y > 0 and wpos.x > 0 and wpos.y > 0 then
-				defaultCenter = ImVec2(wpos.x + wsz.x * 0.5, wpos.y + wsz.y * 0.5)
+				defaultCenter = toScreenPoint(wpos.x + wsz.x * 0.5, wpos.y + wsz.y * 0.5)
 			end
 		end
 
@@ -119,18 +152,18 @@ local function BeginPiePopup(menuCtx, pName, iMouseButton)
 				end
 				local io = imgui.GetIO()
 				local clickPos = io.MouseClickedPos and io.MouseClickedPos[0]
-				local mp = io.MousePos
+				local mp = (imgui.GetMousePos and imgui.GetMousePos()) or io.MousePos
 				local disp = io.DisplaySize
 				if defaultCenter and defaultCenter.x > 0 and defaultCenter.y > 0 then
 					menuCtx.m_oCenter = defaultCenter
 				elseif clickPos and clickPos.x > 0 and clickPos.y > 0 and clickPos.x < 10000 and clickPos.y < 10000 then
-					menuCtx.m_oCenter = ImVec2(clickPos.x, clickPos.y)
+					menuCtx.m_oCenter = toScreenPoint(clickPos.x, clickPos.y)
 				elseif mp and mp.x > 0 and mp.y > 0 and mp.x < 10000 and mp.y < 10000 then
-					menuCtx.m_oCenter = ImVec2(mp.x, mp.y)
+					menuCtx.m_oCenter = toScreenPoint(mp.x, mp.y)
 				elseif disp and disp.x > 0 and disp.y > 0 then
-					menuCtx.m_oCenter = ImVec2(disp.x * 0.5, disp.y * 0.5)
+					menuCtx.m_oCenter = toScreenPoint(disp.x * 0.5, disp.y * 0.5)
 				else
-					menuCtx.m_oCenter = ImVec2(500, 500)
+					menuCtx.m_oCenter = toScreenPoint(500, 500)
 				end
 			end
 			menuCtx.m_iLastFrame = iCurrentFrame
@@ -146,13 +179,14 @@ local function BeginPiePopup(menuCtx, pName, iMouseButton)
 	return false
 end
 
-local function EndPiePopup(menuCtx)
+function EndPiePopup(a1)
+	local menuCtx = isContext(a1) and a1 or defaultContext
 	EndPieMenuEx(menuCtx)
 	local pDrawList = imgui.GetWindowDrawList()
 	local oStyle = imgui.GetStyle()
 	local ok, err = pcall(function()
 		pDrawList:PushClipRectFullScreen()
-		local oMousePos = imgui.GetIO().MousePos
+		local oMousePos = (imgui.GetMousePos and imgui.GetMousePos()) or imgui.GetIO().MousePos
 		local oDragDelta = ImVec2(oMousePos.x - menuCtx.m_oCenter.x, oMousePos.y - menuCtx.m_oCenter.y)
 		local fDragDistSqr = oDragDelta.x*oDragDelta.x + oDragDelta.y*oDragDelta.y
 		local fCurrentRadius = menuCtx.c_iRadiusEmpty
@@ -190,7 +224,7 @@ local function EndPiePopup(menuCtx)
 					end
 					if drag_angle >= item_inner_ang_min and drag_angle < item_inner_ang_max  then
 						hovered = true
-						bItemHovered = true
+						bItemHovered = not oPieMenu.m_oItemIsSubMenu[item_n]
 					end
 				end
 
@@ -269,7 +303,8 @@ local function EndPiePopup(menuCtx)
 		if oArea.Min.y < 0  then
 			menuCtx.m_oCenter.y = ( menuCtx.m_oCenter.y - oArea.Min.y )
 		end
-		local oDisplaySize = imgui.GetIO().DisplaySize
+		local disp = imgui.GetIO().DisplaySize
+		local oDisplaySize = toScreenPoint(disp.x, disp.y)
 		if oDisplaySize and oDisplaySize.x > 0 and oDisplaySize.y > 0 then
 			if oArea.Max.x > oDisplaySize.x  then
 				menuCtx.m_oCenter.x = ( menuCtx.m_oCenter.x - oArea.Max.x ) + oDisplaySize.x
@@ -281,7 +316,7 @@ local function EndPiePopup(menuCtx)
 		local isReleased = imgui.IsMouseReleased(0) or (menuCtx.m_iMouseButton and imgui.IsMouseReleased(menuCtx.m_iMouseButton))
 		local isClicked = imgui.IsMouseClicked(0) or (menuCtx.m_iMouseButton and imgui.IsMouseClicked(menuCtx.m_iMouseButton))
 		local curFrame = imgui.GetFrameCount()
-		if menuCtx.m_bClose or (menuCtx.m_iOpenFrame and curFrame > menuCtx.m_iOpenFrame + 5 and not bItemHovered and (isClicked or isReleased)) then
+		if menuCtx.m_bClose or (menuCtx.m_iOpenFrame and curFrame > menuCtx.m_iOpenFrame + 2 and not bItemHovered and (isClicked or isReleased)) then
 			imgui.CloseCurrentPopup()
 		end
 	end)
@@ -294,7 +329,23 @@ local function EndPiePopup(menuCtx)
 	imgui.PopStyleVar(2)
 end
 
-local function BeginPieMenu(menuCtx, pName, bEnabled)
+function BeginPieMenu(a1, a2, a3)
+	local menuCtx, pName, bEnabled
+	if isContext(a1) then
+		menuCtx = a1
+		pName = tostring(a2 or "")
+		bEnabled = a3
+	else
+		menuCtx = defaultContext
+		if type(a1) == "string" then
+			pName = a1
+			bEnabled = a2
+		else
+			pName = tostring(a2 or "")
+			bEnabled = a3
+		end
+	end
+
 	if menuCtx.m_iCurrentIndex < 0 or menuCtx.m_iCurrentIndex >= menuCtx.c_iMaxPieItemCount then
 		return false
 	end
@@ -320,13 +371,30 @@ local function BeginPieMenu(menuCtx, pName, bEnabled)
 	return false
 end
 
-local function EndPieMenu(menuCtx)
+function EndPieMenu(a1)
+	local menuCtx = isContext(a1) and a1 or defaultContext
 	if menuCtx.m_iCurrentIndex >= 0 then
 		menuCtx.m_iCurrentIndex = menuCtx.m_iCurrentIndex - 1
 	end
 end
 
-local function PieMenuItem(menuCtx, pName, bEnabled)
+function PieMenuItem(a1, a2, a3)
+	local menuCtx, pName, bEnabled
+	if isContext(a1) then
+		menuCtx = a1
+		pName = tostring(a2 or "")
+		bEnabled = a3
+	else
+		menuCtx = defaultContext
+		if type(a1) == "string" then
+			pName = a1
+			bEnabled = a2
+		else
+			pName = tostring(a2 or "")
+			bEnabled = a3
+		end
+	end
+
 	if menuCtx.m_iCurrentIndex < 0 or menuCtx.m_iCurrentIndex >= menuCtx.c_iMaxPieItemCount then
 		return false
 	end
@@ -347,7 +415,7 @@ local function PieMenuItem(menuCtx, pName, bEnabled)
 	local curFrame = imgui.GetFrameCount()
 	local itemIdx = oPieMenu.m_iCurrentIndex
 	local isHovered = (itemIdx == oPieMenu.m_iHoveredItem) or (itemIdx == oPieMenu.m_iLastHoveredItem)
-	local bActive = isHovered and (isReleased or isClicked) and (curFrame > (menuCtx.m_iOpenFrame or 0) + 2)
+	local bActive = isHovered and (isReleased or isClicked) and (curFrame > (menuCtx.m_iOpenFrame or 0))
 	oPieMenu.m_iCurrentIndex = itemIdx + 1
 	if bActive then
 		menuCtx.m_bClose = true
@@ -355,31 +423,49 @@ local function PieMenuItem(menuCtx, pName, bEnabled)
 	return bActive
 end
 
-local function New(...)
+function New(...)
 	local menuContext = NewPieMenuContext(...)
 	return {
-		BeginPiePopup = function(name, mouseButton)
-			local r = BeginPiePopup(menuContext, name, mouseButton)
-			return r
+		meta = {
+			VERSION = 2000,
+			VERSION_STR = '2.0.0',
+		},
+		BeginPiePopup = function(self_or_name, name_or_btn, btn)
+			local name = type(self_or_name) == "string" and self_or_name or name_or_btn
+			local button = type(self_or_name) == "string" and name_or_btn or btn
+			return BeginPiePopup(menuContext, name, button)
 		end,
 		EndPiePopup = function()
-			local r = EndPiePopup(menuContext)
-			return r
+			return EndPiePopup(menuContext)
 		end,
-		PieMenuItem = function(name, enabled)
-			local r = PieMenuItem(menuContext, name, enabled)
-			return r
+		PieMenuItem = function(self_or_name, name_or_en, en)
+			local name = type(self_or_name) == "string" and self_or_name or name_or_en
+			local enabled = type(self_or_name) == "string" and name_or_en or en
+			return PieMenuItem(menuContext, name, enabled)
 		end,
-		BeginPieMenu = function(name, enabled)
-			local r = BeginPieMenu(menuContext, name, enabled)
-			return r
+		BeginPieMenu = function(self_or_name, name_or_en, en)
+			local name = type(self_or_name) == "string" and self_or_name or name_or_en
+			local enabled = type(self_or_name) == "string" and name_or_en or en
+			return BeginPieMenu(menuContext, name, enabled)
 		end,
 		EndPieMenu = function()
-			local r = EndPieMenu(menuContext)
-			return r
+			return EndPieMenu(menuContext)
 		end
 	}
 end
+
+-- Export functions to global table for scripts that call them directly
+_G.ImRectAdd = ImRectAdd
+_G.NewPieMenu = NewPieMenu
+_G.NewPieMenuContext = NewPieMenuContext
+_G.BeginPieMenuEx = BeginPieMenuEx
+_G.EndPieMenuEx = EndPieMenuEx
+_G.BeginPiePopup = BeginPiePopup
+_G.EndPiePopup = EndPiePopup
+_G.BeginPieMenu = BeginPieMenu
+_G.EndPieMenu = EndPieMenu
+_G.PieMenuItem = PieMenuItem
+_G.New = New
 
 local defaultPieMenu = New()
 defaultPieMenu.New = New
@@ -388,4 +474,5 @@ defaultPieMenu.meta = {
 	VERSION = 2000,
 	VERSION_STR = '2.0.0',
 }
+
 return defaultPieMenu

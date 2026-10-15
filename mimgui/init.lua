@@ -3080,33 +3080,12 @@ local function get_cdata_zero(c)
     return c[0]
 end
 
-local function stopScriptOnError(contextName, err)
-    local errMsg = tostring(err or "Unknown error")
-    print(string.format("[mimgui] %s: %s", contextName, errMsg))
-    local s = nil
-    if type(thisScript) == "function" then
-        s = thisScript()
-    end
-    if s then
-        if type(s.die) == "function" then
-            s:die(errMsg)
-        elseif type(s.unload) == "function" then
-            s:unload()
-        end
-    end
-    error(errMsg)
-end
-
 local function evalCond(cond)
     if cond == nil then return true end
     local val = cond
     if type(cond) == "function" then
         local ok, res = pcall(cond)
-        if not ok then
-            stopScriptOnError("Error in condition callback", res)
-            return false
-        end
-        if res == nil or res == false then return false end
+        if not ok or res == nil or res == false then return false end
         val = res
     end
     if type(val) == "cdata" then
@@ -3139,8 +3118,7 @@ function mimgui.__beforeDrawFrame()
             if sub and sub.active and sub.callback then
                 local ok, err = pcall(sub.callback)
                 if not ok and err then
-                    sub.active = false
-                    stopScriptOnError("Error in OnInitialize callback", err)
+                    print("[mimgui] Error in OnInitialize callback: " .. tostring(err))
                 end
             end
         end
@@ -3174,9 +3152,7 @@ function mimgui.__beforeDrawFrame()
                 if sub.before then
                     local ok, err = pcall(sub.before, sub)
                     if not ok and err then
-                        sub.active = false
-                        sub._currentActive = false
-                        stopScriptOnError("Error in before callback", err)
+                        print("[mimgui] Error in before callback: " .. tostring(err))
                     end
                 end
                 if sub.HideCursor ~= true then
@@ -3208,9 +3184,7 @@ function mimgui.__onDrawFrame()
         if sub and sub.active and sub._currentActive and sub.draw then
             local ok, err = pcall(sub.draw, sub)
             if not ok and err then
-                sub.active = false
-                sub._currentActive = false
-                stopScriptOnError("Error in draw callback", err)
+                print("[mimgui] Error in draw callback: " .. tostring(err))
             end
             if sub.HideCursor ~= true then
                 showCursor = true
