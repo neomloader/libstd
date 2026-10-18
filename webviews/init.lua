@@ -44,33 +44,32 @@ function webviews.changeUrl(id, url)
     envu.CallStaticVoidMethod(class, "changeUrl", "(ILjava/lang/String;)V", ffi.cast("jint", id), jstr)
     env.DeleteLocalRef(jstr)
 end
+local jval2 = ffi.new("jvalue[2]")
+local jval4 = ffi.new("jvalue[4]")
+
 function webviews.setClickable(id, bool)
-    local args = ffi.new("jvalue[2]")
-    args[0].i = id
-    args[1].z = bool and 1 or 0
-    envu.CallStaticVoidMethodA(class, "setClickable", "(IZ)V", args)
+    jval2[0].i = id
+    jval2[1].z = bool and 1 or 0
+    envu.CallStaticVoidMethodA(class, "setClickable", "(IZ)V", jval2)
 end
 function webviews.setVisible(id, bool)
-    local args = ffi.new("jvalue[2]")
-    args[0].i = id
-    args[1].z = bool and 1 or 0
-    envu.CallStaticVoidMethodA(class, "setVisible", "(IZ)V", args)
+    jval2[0].i = id
+    jval2[1].z = bool and 1 or 0
+    envu.CallStaticVoidMethodA(class, "setVisible", "(IZ)V", jval2)
 end
 function webviews.setPos(id, x, y)
-    local args = ffi.new("jvalue[4]")
-    args[0].i = id
-    args[1].z = 1
-    args[2].i = x
-    args[3].i = y
-    envu.CallStaticVoidMethodA(class, "resizeBrowser", "(IZII)V", args)
+    jval4[0].i = id
+    jval4[1].z = 1
+    jval4[2].i = x
+    jval4[3].i = y
+    envu.CallStaticVoidMethodA(class, "resizeBrowser", "(IZII)V", jval4)
 end
 function webviews.setSize(id, x, y)
-    local args = ffi.new("jvalue[4]")
-    args[0].i = id
-    args[1].z = 0
-    args[2].i = x
-    args[3].i = y
-    envu.CallStaticVoidMethodA(class, "resizeBrowser", "(IZII)V", args)
+    jval4[0].i = id
+    jval4[1].z = 0
+    jval4[2].i = x
+    jval4[3].i = y
+    envu.CallStaticVoidMethodA(class, "resizeBrowser", "(IZII)V", jval4)
 end
 function webviews.deleteBrowser(id) envu.CallStaticVoidMethod(class, "deleteBrowser", "(I)V", ffi.cast("jint", id)) end
 function webviews.showCloseButton(id, bool) envu.CallStaticVoidMethod(class, "showCloseButton", "(IZ)V", ffi.cast("jint", id), bool) end
@@ -145,10 +144,11 @@ function webviews.restartCallback()
 		UDP:send('CONNECT')
 		while true do
 		    wait(0)
-		    local data = UDP:receive()
-		    if data ~= nil then
-		      local success, data = pcall(cjson.decode, data)
-		      if success then webviews.onAction(data) end
+		    while true do
+		        local data = UDP:receive()
+		        if not data then break end
+		        local success, decoded = pcall(cjson.decode, data)
+		        if success then webviews.onAction(decoded) end
 		    end
 		end
 	end)
@@ -156,7 +156,6 @@ end
 
 function onTouch(type, id, x, y)
 	for i, value in ipairs(async) do
-	    print("value still alive", value)
 	    webviews.sendClick(value, type, id, x, y)
 	end
 end
@@ -169,11 +168,13 @@ udpCallback = lua_thread.create(function()
 	UDP:send('CONNECT')
 	while true do
 	    wait(0)
-	    local data = UDP:receive()
-	    if data ~= nil then
-	      local success, data = pcall(cjson.decode, data)
-		  if success then webviews.onAction(data)
-		  else print("failed to decode: ", data) end
+	    while true do
+	        local data = UDP:receive()
+	        if not data then break end
+	        local success, decoded = pcall(cjson.decode, data)
+	        if success then 
+	            webviews.onAction(decoded)
+	        end
 	    end
 	end
 end)

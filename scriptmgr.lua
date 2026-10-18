@@ -685,13 +685,18 @@ imgui.OnFrame(
       local wvWidth = math.floor(imgui.GetWindowContentRegionMax().x)
 
       if wvWindow.created then
-        if wvWindow.position.x ~= imgui.GetWindowPos().x or wvWindow.position.y ~= imgui.GetWindowPos().y then
-          wv.setPos(0, imgui.GetWindowPos().x, imgui.GetWindowPos().y + wvTopY)
+        local curWinPosX = math.floor(imgui.GetWindowPos().x)
+        local curWinPosY = math.floor(imgui.GetWindowPos().y + wvTopY)
+        if wvWindow.position.x ~= curWinPosX or wvWindow.position.y ~= curWinPosY then
+          wv.setPos(0, curWinPosX, curWinPosY)
+          wvWindow.position.x = curWinPosX
+          wvWindow.position.y = curWinPosY
         end
         if wvWindow.position.h ~= wvHeight or wvWindow.position.w ~= wvWidth then
           wv.setSize(0, wvWidth, wvHeight)
+          wvWindow.position.w = wvWidth
+          wvWindow.position.h = wvHeight
         end
-        wvWindow.position = {x = imgui.GetWindowPos().x, y = imgui.GetWindowPos().y, w = wvWidth, h = wvHeight}
       end
      
       if wvWindow.created and wvWindow.confirmDialog.text ~= nil and isWebViewsLoaded then

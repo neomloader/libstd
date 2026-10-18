@@ -1,6 +1,6 @@
 {
   "version": "1.0.2",
-  "updated_at": "2026-10-18T00:49:54.600807+00:00",
+  "updated_at": "2026-10-18T02:20:09.575221+00:00",
   "total_files": 116,
   "files": {
     "LIP.lua": {
@@ -108,8 +108,8 @@
       "size": 14501
     },
     "scriptmgr.lua": {
-      "sha256": "f4db781bb943253ab55e98511b8d60c0ea23ef80bfc10844fa92ae9d5d62bf7f",
-      "size": 78098
+      "sha256": "8247ffdbf68a477758448ddd17274bd4e711189d0159076eefe1b49ff32ec9af",
+      "size": 78229
     },
     "sha256.lua": {
       "sha256": "270c05c899638d9f8e8ce149f6e5201b25c8ea62756dce9ffdabcff094a19bc5",
@@ -288,12 +288,12 @@
       "size": 2823
     },
     "webviews/WebViews.jar": {
-      "sha256": "efc8da68dedaa46fda59534cf097f11c26a928e5466739b3bfc21bc87a7a232a",
-      "size": 18802
+      "sha256": "b366f80695bb62a6f55b6b9cd2760b90366a2796f4249d25e94de6d759bcb5fa",
+      "size": 18778
     },
     "webviews/init.lua": {
-      "sha256": "3e33344e73ef5c15c36affb81ffb97270404166c69e6363d73ff3affd94fc852",
-      "size": 7198
+      "sha256": "c30bd10d674b718001e094236fe6141dba18a2d8af8902aee90071a3ecc4a38c",
+      "size": 7166
     },
     "android/arizona.lua": {
       "sha256": "1419c651e2be2ccacfe53f8fa3c0db578b1481377ae5fea1136d2fc6bf6b8e22",
