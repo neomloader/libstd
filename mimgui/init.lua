@@ -3393,8 +3393,8 @@ function mimgui.GetClipboardText()
         local ok, res = pcall(getClipboardText)
         if ok and res and res ~= "" then return res end
     end
-    local str = ffi.C.igGetClipboardText()
-    if str ~= nil and str ~= ffi.null then return ffi.string(str) end
+    local ok, str = pcall(function() return ffi.C.igGetClipboardText() end)
+    if ok and str ~= nil and str ~= ffi.null then return ffi.string(str) end
     return ""
 end
 
@@ -3403,8 +3403,16 @@ function mimgui.SetClipboardText(text)
     if setClipboardText then
         pcall(setClipboardText, s)
     end
-    return ffi.C.igSetClipboardText(s)
+    pcall(function()
+        if ffi.C.igSetClipboardText then
+            ffi.C.igSetClipboardText(s)
+        end
+    end)
+    return true
 end
+
+mimgui.getClipboardText = mimgui.GetClipboardText
+mimgui.setClipboardText = mimgui.SetClipboardText
 
 function mimgui.SetWindowPosStr(name, pos, cond)
     return ffi.C.igSetWindowPos_Str(tostring(name), to_vec2(pos), cond or 0)
@@ -3457,6 +3465,14 @@ local function resolve_symbol(k)
             symbol_cache[k] = enums[enum_group][enum_val]
             return enums[enum_group][enum_val]
         end
+    end
+
+    local str_k = tostring(k)
+    local pascal_k = str_k:sub(1,1):upper() .. str_k:sub(2)
+    if pascal_k ~= str_k and rawget(mimgui, pascal_k) ~= nil then
+        local fn = rawget(mimgui, pascal_k)
+        symbol_cache[k] = fn
+        return fn
     end
 
     local ok, fn = pcall(function() return ffi.C["ig" .. k] end)
