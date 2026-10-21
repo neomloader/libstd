@@ -3391,10 +3391,17 @@ end
 function mimgui.GetClipboardText()
     if getClipboardText then
         local ok, res = pcall(getClipboardText)
-        if ok and res and res ~= "" then return res end
+        if ok and res ~= nil and res ~= "" then return tostring(res) end
     end
     local ok, str = pcall(function() return ffi.C.igGetClipboardText() end)
-    if ok and str ~= nil and str ~= ffi.null then return ffi.string(str) end
+    if ok and str ~= nil and str ~= ffi.null then
+        local s = ffi.string(str)
+        if s ~= "" then return s end
+    end
+    if getClipboardText then
+        local ok, res = pcall(getClipboardText)
+        if ok and res ~= nil then return tostring(res) end
+    end
     return ""
 end
 
@@ -3413,6 +3420,8 @@ end
 
 mimgui.getClipboardText = mimgui.GetClipboardText
 mimgui.setClipboardText = mimgui.SetClipboardText
+mimgui.get = mimgui.GetClipboardText
+mimgui.set = mimgui.SetClipboardText
 
 function mimgui.SetWindowPosStr(name, pos, cond)
     return ffi.C.igSetWindowPos_Str(tostring(name), to_vec2(pos), cond or 0)

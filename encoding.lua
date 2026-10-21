@@ -262,18 +262,55 @@ local utf8_to_cp1251 = {
 local u8_cache = {}
 local u8_cache_count = 0
 local s_native_u8 = nil
+local function is_valid_utf8_multibyte(s)
+	local i, len = 1, #s
+	local has_high = false
+	while i <= len do
+		local c = s:byte(i)
+		if c <= 0x7F then
+			i = i + 1
+		elseif c >= 0xC2 and c <= 0xDF then
+			if i + 1 > len then return false end
+			local c2 = s:byte(i + 1)
+			if c2 < 0x80 or c2 > 0xBF then return false end
+			has_high = true
+			i = i + 2
+		elseif c >= 0xE0 and c <= 0xEF then
+			if i + 2 > len then return false end
+			local c2, c3 = s:byte(i + 1), s:byte(i + 2)
+			if c2 < 0x80 or c2 > 0xBF or c3 < 0x80 or c3 > 0xBF then return false end
+			has_high = true
+			i = i + 3
+		elseif c >= 0xF0 and c <= 0xF4 then
+			if i + 3 > len then return false end
+			local c2, c3, c4 = s:byte(i + 1), s:byte(i + 2), s:byte(i + 3)
+			if c2 < 0x80 or c2 > 0xBF or c3 < 0x80 or c3 > 0xBF or c4 < 0x80 or c4 > 0xBF then return false end
+			has_high = true
+			i = i + 4
+		else
+			return false
+		end
+	end
+	return has_high
+end
+
 local function cp1251_to_u8(s)
 	if type(s) ~= "string" or s == "" then return s or "" end
 	local cached = u8_cache[s]
 	if cached then return cached end
+	if not s:find("[\128-\255]") or is_valid_utf8_multibyte(s) then
+		if u8_cache_count < 32768 then
+			u8_cache[s] = s
+			u8_cache_count = u8_cache_count + 1
+		end
+		return s
+	end
 	if s_native_u8 == nil then
 		s_native_u8 = rawget(_G, "monet_cp1251_to_utf8") or rawget(_G, "ansiToUtf8") or false
 	end
 	local res
 	if s_native_u8 then
 		res = s_native_u8(s)
-	elseif not s:find("[\128-\255]") then
-		res = s
 	else
 		res = (s:gsub("[\128-\255]", cp1251_to_utf8))
 	end
