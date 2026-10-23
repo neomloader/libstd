@@ -1362,7 +1362,6 @@ fa_icon.Init = function(fontsize)
         end
     end
     local iconRanges = s_cachedIconRanges
-    fa_icon.iconRanges = iconRanges
 
     local hasBaseFont = false
     local count = 0
@@ -1459,6 +1458,8 @@ setmetatable(fa_icon, {
 				return { MIN_ICON, MAX_ICON, 0 }
 			elseif i == 'icon' then
 				return fa_icon_font
+			elseif i == 'iconRanges' then
+				return s_cachedIconRanges
 			elseif i == 'get_font_data_base85' then
 				return get_font_data_base85
 			elseif i == 'keys' or i == 'list' then

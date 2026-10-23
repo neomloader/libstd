@@ -572,9 +572,10 @@ end
 
 local ImFont_methods = {
     CalcTextSizeA = function(self, size, max_width, wrap_width, text, text_end, out_remaining)
-        local max_w = tonumber(max_width) or 3.402823466e+38
+        local max_w = tonumber(max_width)
+        if not max_w or max_w <= 0 then max_w = 3.402823466e+38 end
         local wrap_w = tonumber(wrap_width) or 0.0
-        local sz = tonumber(size) or (self.FontSize > 0 and self.FontSize or 14.0)
+        local sz = tonumber(size) or 14.0
         local text_str = tostring(text or "")
         local res = ffi.C.ImFont_CalcTextSizeA(self, sz, max_w, wrap_w, text_str, text_end or ffi.null, out_remaining or ffi.null)
         return ImVec2(res.x, res.y)
@@ -2509,15 +2510,16 @@ end
 function mimgui.CreateTextureFromMemory(data, size)
     if data == nil then return 0 end
     local ptr = data
-    if type(data) == "number" then
-        ptr = ffi.cast("const unsigned char*", ffi.cast("uintptr_t", data))
-    elseif type(data) == "string" then
+    if type(data) == "string" then
         size = size or #data
         ptr = ffi.cast("const unsigned char*", data)
     elseif type(data) == "cdata" then
         ptr = ffi.cast("const unsigned char*", data)
+    elseif type(data) == "number" then
+        ptr = ffi.cast("const unsigned char*", ffi.cast("uintptr_t", data))
     end
     size = size or 0
+    if size <= 0 then return 0 end
     return ffi.C.neom_mimgui_create_texture_from_memory(ptr, size)
 end
 

@@ -115,17 +115,30 @@ local function process_packet(id, bs, event_table, ignorebits)
 			callback = MODULE[key]
 		end
 		if callback then
+			if id == 206 then
+				print(string.format("[BulletTracer][Lua] dispatching %s for packet 206", tostring(key)))
+			end
 			return process_event(bs, callback, entry, ignorebits)
+		else
+			if id == 206 then
+				print(string.format("[BulletTracer][Lua] packet 206 received but callback %s is NOT registered in MODULE", tostring(key)))
+			end
 		end
 	end
 end
 
 local interface = MODULE.INTERFACE
 local function samp_on_send_rpc(id, bitStream, priority, reliability, orderingChannel, shiftTs)
+	if id == 115 or id == 128 or id == 40 or id == 46 then
+		print(string.format("[BulletTracer][Lua] OUT RPC id=%d, registered=%s", id, tostring(interface.OUTCOMING_RPCS[id] ~= nil)))
+	end
 	return process_packet(id, bitStream, interface.OUTCOMING_RPCS)
 end
 
 local function samp_on_send_packet(id, bitStream, priority, reliability, orderingChannel)
+	if id == 206 or id == 203 or id == 221 then
+		print(string.format("[BulletTracer][Lua] OUT packet id=%d, registered=%s", id, tostring(interface.OUTCOMING_PACKETS[id] ~= nil)))
+	end
 	return process_packet(id, bitStream, interface.OUTCOMING_PACKETS, 8)
 end
 
@@ -134,6 +147,9 @@ local function samp_on_receive_rpc(id, bitStream)
 end
 
 local function samp_on_receive_packet(id, bitStream)
+	if id == 206 or id == 203 or id == 221 then
+		print(string.format("[BulletTracer][Lua] IN packet id=%d, registered=%s", id, tostring(interface.INCOMING_PACKETS[id] ~= nil)))
+	end
 	return process_packet(id, bitStream, interface.INCOMING_PACKETS, 8)
 end
 
