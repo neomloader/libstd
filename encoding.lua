@@ -312,7 +312,33 @@ local function cp1251_to_u8(s)
 	if s_native_u8 then
 		res = s_native_u8(s)
 	else
-		res = (s:gsub("[\128-\255]", cp1251_to_utf8))
+		local len = #s
+		local i = 1
+		local parts = {}
+		local part_start = 1
+		while i <= len do
+			local c = s:byte(i)
+			if c <= 0x7F then
+				i = i + 1
+			elseif c >= 0xC2 and c <= 0xDF and i + 1 <= len and s:byte(i + 1) >= 0x80 and s:byte(i + 1) <= 0xBF then
+				i = i + 2
+			elseif c >= 0xE0 and c <= 0xEF and i + 2 <= len and s:byte(i + 1) >= 0x80 and s:byte(i + 1) <= 0xBF and s:byte(i + 2) >= 0x80 and s:byte(i + 2) <= 0xBF then
+				i = i + 3
+			elseif c >= 0xF0 and c <= 0xF4 and i + 3 <= len and s:byte(i + 1) >= 0x80 and s:byte(i + 1) <= 0xBF and s:byte(i + 2) >= 0x80 and s:byte(i + 2) <= 0xBF and s:byte(i + 3) >= 0x80 and s:byte(i + 3) <= 0xBF then
+				i = i + 4
+			else
+				if i > part_start then
+					table.insert(parts, s:sub(part_start, i - 1))
+				end
+				table.insert(parts, cp1251_to_utf8[string.char(c)] or "?")
+				i = i + 1
+				part_start = i
+			end
+		end
+		if part_start <= len then
+			table.insert(parts, s:sub(part_start, len))
+		end
+		res = table.concat(parts)
 	end
 	if u8_cache_count < 32768 then
 		u8_cache[s] = res
@@ -323,20 +349,24 @@ end
 
 local cp1251_cache = {}
 local cp1251_cache_count = 0
+local s_native_cp1251 = nil
 local function u8_to_cp1251(s)
-	if type(s) ~= "string" then return s end
+	if type(s) ~= "string" or s == "" then return s or "" end
 	local cached = cp1251_cache[s]
 	if cached then return cached end
 	local res
 	if not s:find("[\128-\255]") then
 		res = s
-	elseif monet_utf8_to_cp1251 then
-		res = monet_utf8_to_cp1251(s)
-	elseif utf8ToAnsi then
-		res = utf8ToAnsi(s)
 	else
-		s = s:gsub("[\224-\239][\128-\191][\128-\191]", utf8_to_cp1251)
-		res = (s:gsub("[\192-\223][\128-\191]", utf8_to_cp1251))
+		if s_native_cp1251 == nil then
+			s_native_cp1251 = rawget(_G, "monet_utf8_to_cp1251") or rawget(_G, "utf8ToAnsi") or false
+		end
+		if s_native_cp1251 then
+			res = s_native_cp1251(s)
+		else
+			s = s:gsub("[\224-\239][\128-\191][\128-\191]", utf8_to_cp1251)
+			res = (s:gsub("[\192-\223][\128-\191]", utf8_to_cp1251))
+		end
 	end
 	if cp1251_cache_count < 16384 then
 		cp1251_cache[s] = res
@@ -469,6 +499,15 @@ function converter.new(enc)
 				if str == nil then return "" end
 				if type(str) ~= "string" then str = tostring(str) end
 				return cp1251_to_u8(str)
+			end
+			return self:encode(str, enc_override)
+		end
+	elseif enc == "CP1251" then
+		function mt:__call(str, enc_override)
+			if not enc_override and encoding.default == "CP1251" then
+				if str == nil then return "" end
+				if type(str) ~= "string" then str = tostring(str) end
+				return u8_to_cp1251(str)
 			end
 			return self:encode(str, enc_override)
 		end
