@@ -1,7 +1,7 @@
 {
   "version": "1.0.2",
-  "updated_at": "2026-10-27T18:31:47.840464+00:00",
-  "total_files": 118,
+  "updated_at": "2026-10-27T20:32:49.316182+00:00",
+  "total_files": 124,
   "files": {
     "LIP.lua": {
       "sha256": "60c5c4b948622f640b572b126e9f2912002a8aa431ebeeb14d458bd61ea23f35",
@@ -122,6 +122,10 @@
     "sha256.lua": {
       "sha256": "270c05c899638d9f8e8ce149f6e5201b25c8ea62756dce9ffdabcff094a19bc5",
       "size": 5075
+    },
+    "snet.lua": {
+      "sha256": "4b83095206ac7d1e762bd015b0feeee03a2cd1300dcb9841b1a5596752377820",
+      "size": 91
     },
     "socket.lua": {
       "sha256": "4d93449f1a7d12671249e32d92edc25c7b26fda37a86af770c1575d964c913a2",
@@ -474,6 +478,26 @@
     "game/weapons.lua": {
       "sha256": "1843758c78ed22e69bae5139b7dc9ebe73446a0b75d70eb5caf224eea0ebd318",
       "size": 4924
+    },
+    "snet/bstream.lua": {
+      "sha256": "d63582967f30981628e777677e895fa79d43314dab43c8bc4ef480dedb419e42",
+      "size": 1557
+    },
+    "snet/client.lua": {
+      "sha256": "9154c0aa06c6a36abb7f77086641c55aab65964850295ad0dce1b636337f178c",
+      "size": 3335
+    },
+    "snet/init.lua": {
+      "sha256": "1882c095c352c2914e695e0d765e70ce4306ad26a09f21f86e49ebe9f3573d76",
+      "size": 1406
+    },
+    "snet/server.lua": {
+      "sha256": "3e1010f486266f25fddb6210f8e3703a0c48852f51c6c01bf533516223cfc7b4",
+      "size": 5405
+    },
+    "snet/utilities/bcoder.lua": {
+      "sha256": "b146744fb775d042622053702aa2ae1cebd9a053b2c752803dc538693b53898b",
+      "size": 899
     }
   }
 }
