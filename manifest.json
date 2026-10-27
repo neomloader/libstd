@@ -1,6 +1,6 @@
 {
   "version": "1.0.2",
-  "updated_at": "2026-10-25T22:13:38.796907+00:00",
+  "updated_at": "2026-10-27T18:31:47.840464+00:00",
   "total_files": 118,
   "files": {
     "LIP.lua": {
@@ -472,8 +472,8 @@
       "size": 310
     },
     "game/weapons.lua": {
-      "sha256": "63e8c05caffbb5336b5ac23cd3963a105b1791736060d54856295024ef601d63",
-      "size": 2577
+      "sha256": "1843758c78ed22e69bae5139b7dc9ebe73446a0b75d70eb5caf224eea0ebd318",
+      "size": 4924
     }
   }
 }
