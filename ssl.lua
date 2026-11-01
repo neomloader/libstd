@@ -45,7 +45,55 @@ local function wireformat2array(str)
    return array
 end
 
+local context_cache = {}
+
+local function get_cache_key(cfg)
+   if type(cfg) ~= "table" then return nil end
+   if type(cfg.dhparam) == "function" or type(cfg.alpn) == "function" or type(cfg.psk) == "function" then
+      return nil
+   end
+   if cfg.certificates then
+      for _, c in ipairs(cfg.certificates) do
+         if type(c.password) == "function" then return nil end
+      end
+   end
+   local parts = {
+      tostring(cfg.protocol),
+      tostring(cfg.mode),
+      tostring(cfg.verify),
+      tostring(cfg.cafile),
+      tostring(cfg.capath),
+      tostring(cfg.certificate),
+      tostring(cfg.key),
+      tostring(cfg.ciphers),
+      tostring(cfg.ciphersuites),
+      tostring(cfg.depth),
+      tostring(cfg.curve),
+      tostring(cfg.curveslist)
+   }
+   if type(cfg.options) == "table" then
+      for _, opt in ipairs(cfg.options) do
+         table.insert(parts, "opt:" .. tostring(opt))
+      end
+   else
+      table.insert(parts, "opt:" .. tostring(cfg.options))
+   end
+   if type(cfg.alpn) == "table" then
+      for _, a in ipairs(cfg.alpn) do
+         table.insert(parts, "alpn:" .. tostring(a))
+      end
+   elseif cfg.alpn then
+      table.insert(parts, "alpn:" .. tostring(cfg.alpn))
+   end
+   return table.concat(parts, "|")
+end
+
 local function newcontext(cfg)
+   local cache_key = get_cache_key(cfg)
+   if cache_key and context_cache[cache_key] then
+      return context_cache[cache_key]
+   end
+
    local succ, msg, ctx
 
    ctx, msg = context.create(cfg.protocol)
@@ -204,6 +252,10 @@ local function newcontext(cfg)
       else
          context.setdane(ctx)
       end
+   end
+
+   if cache_key and ctx then
+      context_cache[cache_key] = ctx
    end
 
    return ctx

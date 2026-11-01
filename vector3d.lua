@@ -53,10 +53,10 @@ local function get_xyz(val)
 	if type(val) == "number" then
 		return val, val, val
 	end
-	if type(val) == "table" then
-		local vx = val.x or val[0] or val[1] or 0
-		local vy = val.y or val[1] or val[2] or 0
-		local vz = val.z or val[2] or val[3] or 0
+	if type(val) == "table" or type(val) == "cdata" then
+		local ok, vx = pcall(function() return val.x or val[0] or val[1] end)
+		local ok2, vy = pcall(function() return val.y or val[1] or val[2] end)
+		local ok3, vz = pcall(function() return val.z or val[2] or val[3] end)
 		return tonumber(vx) or 0, tonumber(vy) or 0, tonumber(vz) or 0
 	end
 	return 0, 0, 0
@@ -73,6 +73,15 @@ function mt:__mul(v)
 	end
 	local vx, vy, vz = get_xyz(v)
 	return Vector3D(self.x * vx, self.y * vy, self.z * vz)
+end
+
+function mt:__div(v)
+	if type(v) == "number" then
+		if v == 0 then return Vector3D(0, 0, 0) end
+		return Vector3D(self.x / v, self.y / v, self.z / v)
+	end
+	local vx, vy, vz = get_xyz(v)
+	return Vector3D(vx ~= 0 and self.x / vx or 0, vy ~= 0 and self.y / vy or 0, vz ~= 0 and self.z / vz or 0)
 end
 
 function mt:__sub(v)
