@@ -273,6 +273,11 @@ local function is_valid_utf8_multibyte(s)
 			if i + 1 > len then return false end
 			local c2 = s:byte(i + 1)
 			if c2 < 0x80 or c2 > 0xBF then return false end
+			-- In CP1251, 0xC4..0xCF are Russian capital letters (Д..П)
+			-- If followed by 0x80..0xBF (like ё=0xB8, Ё=0xA8), it is CP1251 Russian text, NOT UTF-8!
+			if c >= 0xC4 and c <= 0xCF then return false end
+			-- Вё and ВЁ in CP1251
+			if c == 0xC2 and (c2 == 0xB8 or c2 == 0xA8) then return false end
 			has_high = true
 			i = i + 2
 		elseif c >= 0xE0 and c <= 0xEF then
@@ -320,12 +325,20 @@ local function cp1251_to_u8(s)
 			local c = s:byte(i)
 			if c <= 0x7F then
 				i = i + 1
-			elseif c >= 0xC2 and c <= 0xDF and i + 1 <= len and s:byte(i + 1) >= 0x80 and s:byte(i + 1) <= 0xBF then
-				i = i + 2
-			elseif c >= 0xE0 and c <= 0xEF and i + 2 <= len and s:byte(i + 1) >= 0x80 and s:byte(i + 1) <= 0xBF and s:byte(i + 2) >= 0x80 and s:byte(i + 2) <= 0xBF then
-				i = i + 3
 			elseif c >= 0xF0 and c <= 0xF4 and i + 3 <= len and s:byte(i + 1) >= 0x80 and s:byte(i + 1) <= 0xBF and s:byte(i + 2) >= 0x80 and s:byte(i + 2) <= 0xBF and s:byte(i + 3) >= 0x80 and s:byte(i + 3) <= 0xBF then
+				-- 4-byte UTF-8 emoji
 				i = i + 4
+			elseif (c == 0xE2 or (c == 0xEF and i + 2 <= len and s:byte(i + 1) == 0xB8 and s:byte(i + 2) == 0x8F)) and i + 2 <= len and s:byte(i + 1) >= 0x80 and s:byte(i + 1) <= 0xBF and s:byte(i + 2) >= 0x80 and s:byte(i + 2) <= 0xBF then
+				-- 3-byte UTF-8 emoji / symbol
+				i = i + 3
+			elseif i + 1 <= len and (
+				(c == 0xD0 and ((s:byte(i + 1) >= 0x90 and s:byte(i + 1) <= 0xBF) or s:byte(i + 1) == 0x81 or s:byte(i + 1) == 0x84 or s:byte(i + 1) == 0x86 or s:byte(i + 1) == 0x87 or s:byte(i + 1) == 0x8E))
+				or (c == 0xD1 and ((s:byte(i + 1) >= 0x80 and s:byte(i + 1) <= 0x8F) or s:byte(i + 1) == 0x91 or s:byte(i + 1) == 0x94 or s:byte(i + 1) == 0x96 or s:byte(i + 1) == 0x97 or s:byte(i + 1) == 0x9E))
+				or (c == 0xC2 and s:byte(i + 1) >= 0xA0 and s:byte(i + 1) <= 0xBF and s:byte(i + 1) ~= 0xB8 and s:byte(i + 1) ~= 0xA8)
+				or (c == 0xC3 and s:byte(i + 1) >= 0x80 and s:byte(i + 1) <= 0xBF)
+			) then
+				-- 2-byte UTF-8 (Cyrillic / Latin-1)
+				i = i + 2
 			else
 				if i > part_start then
 					table.insert(parts, s:sub(part_start, i - 1))
