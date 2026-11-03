@@ -328,8 +328,8 @@ local function cp1251_to_u8(s)
 			elseif c >= 0xF0 and c <= 0xF4 and i + 3 <= len and s:byte(i + 1) >= 0x80 and s:byte(i + 1) <= 0xBF and s:byte(i + 2) >= 0x80 and s:byte(i + 2) <= 0xBF and s:byte(i + 3) >= 0x80 and s:byte(i + 3) <= 0xBF then
 				-- 4-byte UTF-8 emoji
 				i = i + 4
-			elseif (c == 0xE2 or (c == 0xEF and i + 2 <= len and s:byte(i + 1) == 0xB8 and s:byte(i + 2) == 0x8F)) and i + 2 <= len and s:byte(i + 1) >= 0x80 and s:byte(i + 1) <= 0xBF and s:byte(i + 2) >= 0x80 and s:byte(i + 2) <= 0xBF then
-				-- 3-byte UTF-8 emoji / symbol
+			elseif c >= 0xE0 and c <= 0xEF and i + 2 <= len and s:byte(i + 1) >= 0x80 and s:byte(i + 1) <= 0xBF and s:byte(i + 2) >= 0x80 and s:byte(i + 2) <= 0xBF then
+				-- 3-byte UTF-8 (FontAwesome, symbols, CJK, etc.)
 				i = i + 3
 			elseif i + 1 <= len and (
 				(c == 0xD0 and ((s:byte(i + 1) >= 0x90 and s:byte(i + 1) <= 0xBF) or s:byte(i + 1) == 0x81 or s:byte(i + 1) == 0x84 or s:byte(i + 1) == 0x86 or s:byte(i + 1) == 0x87 or s:byte(i + 1) == 0x8E))
