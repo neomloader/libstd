@@ -1240,13 +1240,13 @@ imgui.OnFrame(
                       local stage = "prepare"
                       local progress = 0
                       local filename = json.name
-                      local function notifyUpdate() wv.executeJS(data.browserid, "window.app.onDownloadProgress(\""..json.task.."\", \""..stage.."\", \""..filename.."\", "..string.format("%.2f", progress)..")") end
+                      local function notifyUpdate() notifyDownloadJS(data.browserid, json.task, stage, filename, progress) end
                       local function isTaskCancelled() if canceledTasks[json.task] then return true else return false end end
                       wvWindow.confirmDialog.text = locales.get("confirm_download", json.name)
                       while wvWindow.confirmDialog.text ~= nil do wait(0) end
                       if wvWindow.confirmDialog.response == 1 then
-                        wv.executeJS(data.browserid, "window.app.onInstallStage('loading')")
-                        wv.executeJS(data.browserid, "window.app.setFilename('"..json.name.."')")
+                        safeNotifyJS(data.browserid, "window.app.onInstallStage('loading')", false)
+                        safeNotifyJS(data.browserid, "window.app.setFilename('"..json.name.."')", false)
                         showAds() -- udalenie etoi stroki ostavit razraba bez edi na 100 dneu
                         downloadToFile(json.url, jsonModPath..json.name, function(type, pos, total_size)
                           if isTaskCancelled() then
@@ -1282,7 +1282,7 @@ imgui.OnFrame(
                                     filename = "Успешно"
                                     progress = 100
                                     stage = "completed"
-                                    wv.executeJS(data.browserid, "window.app.setModInstalled(\""..json.name.."\", true)")
+                                    safeNotifyJS(data.browserid, "window.app.setModInstalled(\""..json.name.."\", true)", false)
                                     if json.type == "mod" then
                                       wvWindow.confirmDialog.text = locales.get("confirm_reload_all_zip")
                                       while wvWindow.confirmDialog.text ~= nil do wait(0) end
@@ -1302,7 +1302,7 @@ imgui.OnFrame(
                               progress = 100
                               stage = "completed"
                               notifyUpdate()
-                              wv.executeJS(data.browserid, "window.app.setModInstalled(\""..json.name.."\", true)")
+                              safeNotifyJS(data.browserid, "window.app.setModInstalled(\""..json.name.."\", true)", false)
                               if json.type == "mod" then 
                                 script.load(jsonModPath..json.name) 
                               end
@@ -1694,6 +1694,38 @@ end
 
 
 -- https://rentry.co/monetloader-download-functions
+-- Safe WebView JS notifier: throttled, wrapped in pcall, and latched off if
+-- the WebView ever takes too long (the store WebView runs inside the game
+-- process and a wedged WebView would otherwise block the game thread).
+local wvLastNotify = 0
+local wvLastPct = -1
+local wvStage = ""
+local wvUnhealthy = false
+local function safeNotifyJS(browserid, js, throttle)
+  if wvUnhealthy or not wv or not wv.executeJS then return end
+  local now = os.clock()
+  if throttle then
+    if now - wvLastNotify < 1.0 then return end
+    wvLastNotify = now
+  end
+  local t0 = os.clock()
+  local ok = pcall(function() wv.executeJS(browserid, js) end)
+  local dt = os.clock() - t0
+  if dt > 1.0 then
+    wvUnhealthy = true
+    print("[scriptmgr_dbg] wv slow/unhealthy (" .. string.format("%.2f", dt) .. "s), JS updates disabled")
+  end
+  return ok
+end
+local function notifyDownloadJS(browserid, task, stage, filename, progress)
+  -- only push when the integer percent changed or the stage changed
+  local pct = math.floor(progress + 0.5)
+  if stage == wvStage and pct == wvLastPct then return end
+  wvStage = stage
+  wvLastPct = pct
+  safeNotifyJS(browserid, "window.app.onDownloadProgress(\"" .. task .. "\", \"" .. stage .. "\", \"" .. filename .. "\", " .. string.format("%.2f", progress) .. ")")
+end
+
 function downloadToFile(url, path, callback, progressInterval)
   callback = callback or function() end
   progressInterval = progressInterval or 0.1
@@ -1701,77 +1733,138 @@ function downloadToFile(url, path, callback, progressInterval)
   local progressChannel = effil.channel(0)
   local cancelChannel = effil.channel(0)
 
+  print("[scriptmgr_dbg] downloadToFile start url=" .. tostring(url) .. " path=" .. tostring(path) .. " interval=" .. tostring(progressInterval))
+
   local runner = effil.thread(function(url, path)
-    local http = require("socket.http")
-    local ltn = require("ltn12")
+    local ok_worker, worker_res, worker_val = pcall(function()
+      local http = require("socket.http")
+      local ltn = require("ltn12")
 
-    local _, res, code, headers = pcall(http.request, {
-      method = "HEAD",
-      url = url,
-      headers = {
-        ['accept'] = '*/*',
-        ['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0',
-        ['Upgrade-Insecure-Requests'] = '1'
-      }
-    })
+      -- Stalled connections must fail fast, not hang the worker forever.
+      local timeout = { connect = 15, send = 15, receive = 30 }
 
-    local total_size = headers["content-length"] or 0
+      local _, res, code, headers = pcall(http.request, {
+        method = "HEAD",
+        url = url,
+        timeout = timeout,
+        headers = {
+          ['accept'] = '*/*',
+          ['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0',
+          ['Upgrade-Insecure-Requests'] = '1'
+        }
+      })
 
-    local f = io.open(path, "w+b")
-    if not f then
-      return false, "failed to open file"
-    end
-    local success, res, status_code = pcall(http.request, {
-      method = "GET",
-      url = url,
-      headers = {
-        ['accept'] = '*/*',
-        ['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0',
-        ['Upgrade-Insecure-Requests'] = '1'
-      },
-      sink = function(chunk, err)
-        if cancelChannel:size() > 0 then
-            return nil
+      local total_size = 0
+      if type(headers) == "table" and headers["content-length"] then
+        total_size = tonumber(headers["content-length"]) or 0
+      end
+      progressChannel:push("dbg", "head_done", total_size)
+
+      local f = io.open(path, "w+b")
+      if not f then
+        print("[scriptmgr_dbg] worker failed to open file " .. tostring(path))
+        return false, "failed to open file"
+      end
+
+      local written = 0
+      local lastProgress = nil
+      local fileClosed = false
+      local function safeClose()
+        if not fileClosed then
+          fileClosed = true
+          f:close()
         end
+      end
 
-        local clock = os.clock()
-        if chunk and not lastProgress or (clock - lastProgress) >= progressInterval then
-          progressChannel:push("downloading", f:seek("end"), total_size)
-          lastProgress = os.clock()
-        elseif err then
-          progressChannel:push("error", err)
+      local function sinkWrite(chunk, err)
+        if chunk then
+          return ltn.sink.file(f)(chunk, err)
+        elseif fileClosed then
+          -- ltn12 already closed the handle on EOF; nothing to do.
+          return true
         end
-
         return ltn.sink.file(f)(chunk, err)
-      end,
-    })
+      end
 
-    if cancelChannel:size() > 0 then
-        f:close()
-        return false, "cancelled"
+      local success, res, status_code = pcall(http.request, {
+        method = "GET",
+        url = url,
+        timeout = timeout,
+        headers = {
+          ['accept'] = '*/*',
+          ['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0',
+          ['Upgrade-Insecure-Requests'] = '1'
+        },
+        sink = function(chunk, err)
+          if cancelChannel:size() > 0 then
+              return nil
+          end
+
+          if chunk then
+            written = written + #chunk
+            local clock = os.clock()
+            if not lastProgress or (clock - lastProgress) >= progressInterval then
+              progressChannel:push("downloading", written, total_size)
+              lastProgress = clock
+            end
+            return ltn.sink.file(f)(chunk, err)
+          end
+
+          -- EOF (chunk == nil, no error): ltn12 closes the handle itself.
+          fileClosed = true
+          if err then
+            progressChannel:push("error", tostring(err))
+            return nil
+          end
+          return true
+        end,
+      })
+
+      progressChannel:push("dbg", "get_done", tostring(success), tostring(res), tostring(status_code), written)
+
+      if cancelChannel:size() > 0 then
+          safeClose()
+          progressChannel:push("dbg", "cancelled", written)
+          return false, "cancelled"
+      end
+
+      if not success then
+        safeClose()
+        return false, res
+      end
+
+      if not res then
+        safeClose()
+        return false, status_code
+      end
+
+      progressChannel:push("dbg", "close_start")
+      safeClose()
+      progressChannel:push("dbg", "close_done")
+      return true, total_size
+    end)
+
+    if not ok_worker then
+      progressChannel:push("dbg", "exception", tostring(worker_res))
+      progressChannel:push("error", tostring(worker_res))
+      return false, tostring(worker_res)
     end
 
-    if not success then
-      return false, res
-    end
-
-    if not res then
-      return false, status_code
-    end
-
-    return true, total_size
+    return worker_res, worker_val
   end)
   local thread = runner(url, path)
 
   local function checkStatus()
-    local tstatus = thread:status()
-    if tstatus == "failed" or tstatus == "completed" then
-      local result, value = thread:get()
+    -- thread:status() returns the thread's result array on failure
+    -- ({ "failed", <message> }); on completion it returns "completed".
+    local st1, st2 = thread:status()
+    if st1 == "failed" or st1 == "completed" then
+      print("[scriptmgr_dbg] thread " .. tostring(st1) .. " detail=" .. tostring(st2))
 
-      if result then
-        callback("finished", value)
+      if st1 == "failed" then
+        callback("error", st2 or "unknown worker error")
       else
-        callback("error", value)
+        callback("finished", st2)
       end
 
       return true
@@ -1783,14 +1876,56 @@ function downloadToFile(url, path, callback, progressInterval)
       return
     end
 
-    while thread:status() == "running" do
-      if progressChannel:size() > 0 then
-        local type, pos, total_size = progressChannel:pop()
-        local ret = callback(type, pos, total_size)
-        if ret == false then
+    local lastWatchdog = os.clock()
+    local lastProgressAt = os.clock()
+    local lastBytes = 0
+
+    while true do
+      -- Drain all pending progress messages this frame (bounded), so the
+      -- channel stays near-empty and the UI stays current on fast links.
+      local drained = 0
+      while progressChannel:size() > 0 and drained < 200 do
+        local msg = { progressChannel:pop() }
+        local msgType = msg[1]
+        if msgType == "dbg" then
+          local parts = {}
+          for i = 2, #msg do
+            parts[#parts + 1] = tostring(msg[i])
+          end
+          print("[scriptmgr_dbg] worker-dbg: " .. table.concat(parts, " "))
+        else
+          if msgType == "downloading" then
+            lastProgressAt = os.clock()
+            lastBytes = msg[2] or 0
+          end
+          local ret = callback(msgType, msg[2], msg[3])
+          if ret == false then
             cancelChannel:push(true)
+          end
         end
+        drained = drained + 1
       end
+
+      local tstatus = thread:status()
+      if tstatus ~= "running" and progressChannel:size() == 0 then
+        break
+      end
+
+      -- Watchdog: log while waiting (visible in neomloader.log)
+      local now = os.clock()
+      if now - lastWatchdog >= 5 then
+        lastWatchdog = now
+        print("[scriptmgr_dbg] watchdog waiting status=" .. tostring(tstatus) .. " chan=" .. tostring(progressChannel:size()) .. " lastBytes=" .. tostring(lastBytes) .. " idle=" .. string.format("%.0f", now - lastProgressAt) .. "s")
+      end
+
+      -- Stall detection: running but no new bytes for 60s -> cancel + error.
+      if tstatus == "running" and now - lastProgressAt >= 60 and lastBytes > 0 then
+        print("[scriptmgr_dbg] stall detected: no bytes for 60s, cancelling")
+        cancelChannel:push(true)
+        lastProgressAt = now
+        callback("error", "download stalled (no data for 60s)")
+      end
+
       wait(0)
     end
 
@@ -1959,7 +2094,12 @@ function unpack_archive(path_to_archive, output_path, progress_callback)
     local entries = envu.CallObjectMethod(zip, "entries", "()Ljava/util/Enumeration;")
     local total = envu.CallIntMethod(zip, "size", "()I")
     local processed = 0
-    local buffer = env.NewByteArray(64 * 1024)
+    local buffer = env.NewByteArray(256 * 1024)
+    print("[scriptmgr_dbg] unpack_archive start src=" .. tostring(path_to_archive) .. " dst=" .. tostring(output_path) .. " entries=" .. tostring(total))
+
+    -- Yield back to the game loop every 8 chunks (8 * 256KB = 2MB) so unpacking
+    -- a large archive does not freeze the game thread.
+    local YIELD_EVERY_CHUNKS = 8
 
     while toboolean(envu.CallBooleanMethod(entries, "hasMoreElements", "()Z")) do
         env.PushLocalFrame(32)
@@ -1987,6 +2127,11 @@ function unpack_archive(path_to_archive, output_path, progress_callback)
                 local read = envu.CallIntMethod(input, "read", "([B)I", buffer)
                 if read <= 0 then break end
                 envu.CallVoidMethod(output, "write", "([BII)V", buffer, ffi.cast("jint", 0), ffi.cast("jint", read))
+                unfreezeCounter = unfreezeCounter + 1
+                if unfreezeCounter >= YIELD_EVERY_CHUNKS then
+                    unfreezeCounter = 0
+                    wait(0)
+                end
             end
 
             envu.CallVoidMethod(input, "close", "()V")
@@ -2003,6 +2148,7 @@ function unpack_archive(path_to_archive, output_path, progress_callback)
 
         processed = processed + 1
         if not progress_callback("unpacking", processed, total, name) then break end
+        wait(0) -- yield once per archive entry as well
     end
 
     env.DeleteLocalRef(baseDir)
@@ -2012,6 +2158,7 @@ function unpack_archive(path_to_archive, output_path, progress_callback)
     envu.CallVoidMethod(zip, "close", "()V")
     env.DeleteLocalRef(zip)
 
+    print("[scriptmgr_dbg] unpack_archive finished processed=" .. tostring(processed) .. "/" .. tostring(total))
     progress_callback("finished", processed, total, "")
 end
 

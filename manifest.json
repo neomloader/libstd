@@ -1,6 +1,6 @@
 {
   "version": "1.0.2",
-  "updated_at": "2026-11-06T23:49:59.563442+00:00",
+  "updated_at": "2026-11-09T00:44:07.966710+00:00",
   "total_files": 122,
   "files": {
     "LIP.lua": {
@@ -48,7 +48,7 @@
       "size": 42014
     },
     "fAwesome6.lua": {
-      "sha256": "2a8e848ec863de8c70465f18e18aff28e9eefc6f8d92220698ca9ab175c89f9d",
+      "sha256": "f684fc190b19098580ddd8db7793737e48285839ff9ef481d158bbef09c39a96",
       "size": 3841059
     },
     "fAwesome6_solid.lua": {
@@ -108,8 +108,8 @@
       "size": 14501
     },
     "scriptmgr.lua": {
-      "sha256": "8247ffdbf68a477758448ddd17274bd4e711189d0159076eefe1b49ff32ec9af",
-      "size": 78229
+      "sha256": "b7c7805cb57940bad7ad791c88aaca247ccdf3345c1889c6806bdca7b3de074b",
+      "size": 84071
     },
     "sha256.lua": {
       "sha256": "270c05c899638d9f8e8ce149f6e5201b25c8ea62756dce9ffdabcff094a19bc5",
