@@ -191,4 +191,24 @@ assert(ffi.sizeof('SpectatorSyncData') == 18)
 assert(ffi.sizeof('BulletSyncData') == 40)
 assert(ffi.sizeof('AimSyncData') == 31)
 
+local function make_safe_sync_metatype(name)
+	local mt = {
+		__index = function(t, k)
+			return nil
+		end,
+		__newindex = function(t, k, v)
+		end
+	}
+	pcall(ffi.metatype, name, mt)
+end
+
+make_safe_sync_metatype('PlayerSyncData')
+make_safe_sync_metatype('VehicleSyncData')
+make_safe_sync_metatype('PassengerSyncData')
+make_safe_sync_metatype('UnoccupiedSyncData')
+make_safe_sync_metatype('TrailerSyncData')
+make_safe_sync_metatype('SpectatorSyncData')
+make_safe_sync_metatype('BulletSyncData')
+make_safe_sync_metatype('AimSyncData')
+
 return mod

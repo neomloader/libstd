@@ -1,6 +1,6 @@
 {
   "version": "1.0.2",
-  "updated_at": "2026-11-09T00:44:07.966710+00:00",
+  "updated_at": "2026-11-13T02:15:28.984396+00:00",
   "total_files": 122,
   "files": {
     "LIP.lua": {
@@ -212,8 +212,8 @@
       "size": 11714
     },
     "samp/synchronization.lua": {
-      "sha256": "28f1feef572a63acc23eaba6393f6615f97bf8f1185199c47694db2bded79769",
-      "size": 3921
+      "sha256": "b6cf3eb387f733edbaac126ebf481a8cf5f53a73d96194ed08fc156bfcb9fe0a",
+      "size": 4452
     },
     "samp/events/bitstream_io.lua": {
       "sha256": "e5e647726fdcae10e4bb27eb2471c4172d3a482fe21885e9803d661319914de8",
