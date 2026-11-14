@@ -1,59 +1,29 @@
--- MonetLoader for Android 3.0.0
--- Reference script: Script Manager
---
--- For script developers:
--- If you want to allow your script to be toggled from Script Manager, you must implement the following API in EXPORTS:
--- 1. For "Enabled" checkbox:
---    a. canToggle: return true
---    b. getToggle: return <your toggled status variable>
---    c. toggle: execute any code, and switch <your toggled status variable> (switching is optional)
--- 2. For "Activate button":
---    a. canToggle: return false
---    b. getToggle: return false
---    c. toggle: execute any code
---
--- Simple example that implements "Enabled" checkbox:
--- local toggled = false
--- EXPORTS = {
---   canToggle = function() return true end,
---   getToggle = function() return toggled end,
---   toggle = function() toggled = not toggled end
--- }
---
-
--- script info
 script_name('Script Manager')
 script_version('2.1 ARZMOD')
 script_version_number(2)
 script_author('The MonetLoader Team', 'ARZMOD')
 script_description('Script manager that opens on left swipe on radar and provides ability to manage scripts, view logs, execute Lua code in REPL-like mode and receive script notifications.')
-script_properties('work-in-pause', 'forced-reloading-only') -- work even in pause and don't reload ourselves on reloadScripts()
+script_properties('work-in-pause', 'forced-reloading-only')
 
-
--- libs
 local levels = require('moonloader').message_prefix
 local ffi = require('ffi')
-local widgets = require('widgets') -- for WIDGET_(...)
+local widgets = require('widgets')
 local imgui = require('mimgui')
 local faicons = require('fAwesome6')
 local cfg = require('jsoncfg')
 local cjson = require("cjson")
 local memory = require("memory")
-local copas = require ('copas') -- for download scripts from url
-local http = require ('copas.http') -- for download scripts from url
-local gta = ffi.load('GTASA') -- for hook to open link
-local lfs = require('lfs') -- LuaFileSystem for directory operations
+local copas = require ('copas')
+local http = require ('copas.http')
+local gta = ffi.load('GTASA')
+local lfs = require('lfs')
 local isAndroidEnvLoaded, env = pcall(require, "android.jnienv")
 local isAndroidEnvuLoaded, envu = pcall(require, "android.jnienv-util")
 local isWebViewsLoaded, isWebViewsLoadTry, wv = false, false, nil
 
-
 ffi.cdef[[
     void _Z12AND_OpenLinkPKc(const char* link);
 ]]
-
-
--- pretty printing (https://stackoverflow.com/questions/9168058/how-to-dump-a-table-to-console)
 
 function prettyPrintTable(node)
   local cache, stack, output = {},{},{}
@@ -74,7 +44,6 @@ function prettyPrintTable(node)
           output_str = output_str .. ","
         end
 
-        -- This is necessary for working with HUGE tables otherwise we run out of memory using concat on huge strings
         table.insert(output,output_str)
         output_str = ""
 
@@ -103,7 +72,7 @@ function prettyPrintTable(node)
           output_str = output_str .. ","
         end
       else
-        -- close the table
+
         if (cur_index == size) then
           output_str = output_str .. "}"
         end
@@ -125,16 +94,14 @@ function prettyPrintTable(node)
     end
   end
 
-  -- This is necessary for working with HUGE tables otherwise we run out of memory using concat on huge strings
   table.insert(output,output_str)
   output_str = table.concat(output)
-  
+
   return output_str
 end
 
--- pretty prints arguments, expanding tables (also supports multiple nils without omitting them)
 function prettyPrint(...)
-  -- we use select instead of table unpacking in order to handle nil values correctly
+
   local argc = select('#', ...)
   if argc == 0 then
     return 'nil'
@@ -151,15 +118,12 @@ function prettyPrint(...)
         output_str = output_str .. tostring(v)
     end
     if i ~= argc then
-      output_str = output_str .. ',' 
+      output_str = output_str .. ','
     end
   end
 
   return output_str
 end
-
-
--- simple ipairs implementation that supports any type
 
 function stateless_iter(a, i)
   i = i + 1
@@ -172,9 +136,6 @@ end
 function any_ipairs(a)
   return stateless_iter, a, 0
 end
-
-
--- circular buffer class (https://gist.github.com/johndgiese/3e1c6d6e0535d4536692)
 
 local function rotate_indice(i, n)
   return ((i - 1) % n) + 1
@@ -215,8 +176,6 @@ end
 
 circular_buffer.metatable = {}
 
--- positive values index from newest to oldest (starting with 1)
--- negative values index from oldest to newest (starting with -1)
 function circular_buffer.metatable.__index(self, i)
   local history_length = #(self.history)
   if i == 0 or math.abs(i) > history_length then
@@ -250,9 +209,6 @@ function circular_buffer.new(max_length)
   setmetatable(instance, circular_buffer.metatable)
   return instance
 end
-
-
--- notifications (https://www.blast.hk/threads/132205/)
 
 Notifications = {
   _version = '0.2',
@@ -311,7 +267,7 @@ imgui.OnFrame(
     self.HideCursor = true
 
     for k, data in ipairs(Notifications._list) do
-      --==[ UPDATE ALPHA ]==--
+
       if data.alpha == nil then Notifications._list[k].alpha = 0 end
       if os.clock() - data.start < 0.5 then
         Notifications._list[k].alpha = Notifications._BringFloatTo(0, 1, data.start, 0.5)
@@ -319,7 +275,6 @@ imgui.OnFrame(
         Notifications._list[k].alpha = Notifications._BringFloatTo(1, 0, data.start + data.time - 0.5, 0.5)
       end
 
-      --==[ REMOVE ]==--
       if os.clock() - data.start > data.time then
         table.remove(Notifications._list, k)
       end
@@ -336,13 +291,13 @@ imgui.OnFrame(
         + imgui.WindowFlags.NoMove
         + imgui.WindowFlags.NoBackground
     )
-    
+
     local fiveSc = 5 * MONET_DPI_SCALE
     local winSize = imgui.GetWindowSize()
     imgui.SetWindowPosVec2(imgui.ImVec2(resX - 10 * MONET_DPI_SCALE - winSize.x, resY * 0.4))
-    
+
     for k, data in ipairs(Notifications._list) do
-      ------------------------------------------------
+
       local default_data = {
         text = 'text',
         type = 0,
@@ -353,23 +308,20 @@ imgui.OnFrame(
           data[k] = v
         end
       end
-  
-  
+
       local c = imgui.GetCursorPos()
       local p = imgui.GetCursorScreenPos()
       local DL = imgui.GetWindowDrawList()
-  
+
       local textSize = imgui.CalcTextSize(data.text)
       local iconSize = imgui.CalcTextSize(Notifications.ICON[data.type] or faicons('XMARK'))
       local size = imgui.ImVec2(fiveSc + iconSize.x + fiveSc + textSize.x + fiveSc, fiveSc + textSize.y + fiveSc)
-  
-  
+
       local winSize = imgui.GetWindowSize()
       if winSize.x > size.x + 20 * MONET_DPI_SCALE then
           imgui.SetCursorPosX(winSize.x - size.x - 8 * MONET_DPI_SCALE)
       end
-  
-      
+
       imgui.PushStyleVarFloat(imgui.StyleVar.Alpha, data.alpha)
       imgui.PushStyleVarFloat(imgui.StyleVar.ChildRounding, fiveSc)
       imgui.PushStyleColor(imgui.Col.ChildBg,     Notifications._TableToImVec(data.colors.back or Notifications._COLORS[data.type].back))
@@ -387,9 +339,9 @@ imgui.OnFrame(
       imgui.EndChild()
       imgui.PopStyleColor(2)
       imgui.PopStyleVar(2)
-      ------------------------------------------------
+
     end
-    
+
     imgui.End()
   end
 )
@@ -536,15 +488,14 @@ local locales = {
     }
 }
 
-
 function locales.get(key, ...)
     local lang_data = locales.data[locales.current]
     local text = lang_data[key]
-    
+
     if not text then
         text = locales.data.en[key] or key
     end
-   
+
     if select("#", ...) > 0 then
         return string.format(text, ...)
     end
@@ -567,9 +518,6 @@ function locales.get_languages()
     return langs
 end
 
-
--- global vars
-
 local wvWindow = {
   windowUrls = {"https://app.arzmod.com", "https://mods.radarebot.hhos.net"},
   serverfind = false,
@@ -585,49 +533,46 @@ local wvWindow = {
   }
 }
 
-local DEFAULT_CONFIG = { -- default config
-  crashNotifications = true, -- whether to show script crash notifications or not
-  scriptMessageNotifications = false, -- whether to show script message notifications or not
-  messagesCount = 100, -- count of saved messages
-  lastCrashesCount = 10, -- count of saved crashed scripts
-  shellHistoryCount = 50, -- count of saved shell history
+local DEFAULT_CONFIG = {
+  crashNotifications = true,
+  scriptMessageNotifications = false,
+  messagesCount = 100,
+  lastCrashesCount = 10,
+  shellHistoryCount = 50,
   currentLang = "ru",
   skipSuggestion = false
 }
 
-local config = cfg.load(DEFAULT_CONFIG) -- simply config
-local messages = circular_buffer.new(config.messagesCount) -- buffer that stores last messages
-local lastCrashes = circular_buffer.new(config.lastCrashesCount) -- buffer that stores script info about last crashes
-local shellHistory = circular_buffer.new(config.shellHistoryCount) -- buffer that stores shell history
-local shellInputHistory = circular_buffer.new(math.ceil(config.shellHistoryCount / 2)) -- buffer that stores shell input history
-local shellInputHistoryPos = 0 -- current position in shellInputHistory
-local scriptCrashInfos = {} -- buffer that stores reasons for script crash
-local reloadLastCrashInfos = {} -- buffer that stores crash info that initiated reload for a given path
-local disabledScripts = nil -- buffer that stores disabled scripts
+local config = cfg.load(DEFAULT_CONFIG)
+local messages = circular_buffer.new(config.messagesCount)
+local lastCrashes = circular_buffer.new(config.lastCrashesCount)
+local shellHistory = circular_buffer.new(config.shellHistoryCount)
+local shellInputHistory = circular_buffer.new(math.ceil(config.shellHistoryCount / 2))
+local shellInputHistoryPos = 0
+local scriptCrashInfos = {}
+local reloadLastCrashInfos = {}
+local disabledScripts = nil
 
-local selectedScriptId = -1 -- id of selected script
-local selectedScriptExports -- table returned by import on selected script
-local wasInLog = false -- set to true when tab is log, used to auto-scroll to bottom on tab switch
-local wasInShell = false -- same, but with shell
+local selectedScriptId = -1
+local selectedScriptExports
+local wasInLog = false
+local wasInShell = false
 local wasInScriptStore = false
-local windowState = imgui.new.bool(false) -- script mgr window is active or not
--- some imgui wrappers
-local imScriptStatus = imgui.new.bool(false) -- ffi variable for script toggling
+local windowState = imgui.new.bool(false)
+
+local imScriptStatus = imgui.new.bool(false)
 local imCrashNotifications = imgui.new.bool(config.crashNotifications)
 local imScriptMessageNotifications = imgui.new.bool(config.scriptMessageNotifications)
 local imMessagesCount = imgui.new.int(config.messagesCount)
 local imLastCrashesCount = imgui.new.int(config.lastCrashesCount)
 local imShellHistoryCount = imgui.new.int(config.shellHistoryCount)
 
-local scriptsSearchBuffer = imgui.new.char[128]() -- buffer for scripts search input
-local scriptsSearchText = '' -- scripts search input as lua string
-local logSearchBuffer = imgui.new.char[128]() -- buffer for log search input
-local logSearchText = '' -- log search input as lua string
-local shellInputBuffer = imgui.new.char[512]() -- buffer for shell input
+local scriptsSearchBuffer = imgui.new.char[128]()
+local scriptsSearchText = ''
+local logSearchBuffer = imgui.new.char[128]()
+local logSearchText = ''
+local shellInputBuffer = imgui.new.char[512]()
 
--- utils
-
--- formats time in seconds into format: xxh xxm xxs (hours and minutes are omitted if not present)
 function formatClock(diff)
   diff = math.floor(diff)
   local seconds = diff % 60
@@ -639,8 +584,6 @@ function formatClock(diff)
   return (hours > 0 and tostring(hours) .. 'h ' or '') .. (minutes > 0 and tostring(minutes) .. 'm ' or '') .. tostring(seconds) .. 's'
 end
 
-
--- https://www.blast.hk/threads/111224/
 imgui.OnInitialize(function()
     imgui.GetIO().IniFilename = nil
 
@@ -648,22 +591,46 @@ imgui.OnInitialize(function()
     config.MergeMode = true
     config.PixelSnapH = true
 
-    -- bake only needed glyphs in atlas in order to not waste videomemory
     local builder = imgui.ImFontGlyphRangesBuilder()
     for _, v in pairs(Notifications.ICON) do
       builder:AddText(v)
     end
-    glyphRanges = imgui.ImVector_ImWchar() -- global, because it must be present until font atlas is built
+    glyphRanges = imgui.ImVector_ImWchar()
     builder:BuildRanges(glyphRanges)
-    imgui.GetIO().Fonts:AddFontFromMemoryCompressedBase85TTF(faicons.get_font_data_base85('solid'), 14 * MONET_DPI_SCALE, config, glyphRanges[0].Data) -- load scaled DPI font
+    imgui.GetIO().Fonts:AddFontFromMemoryCompressedBase85TTF(faicons.get_font_data_base85('solid'), 14 * MONET_DPI_SCALE, config, glyphRanges[0].Data)
 
-    imgui.GetStyle():ScaleAllSizes(MONET_DPI_SCALE) -- scale default style
+    imgui.GetStyle():ScaleAllSizes(MONET_DPI_SCALE)
 end)
 
+local wvLastNotify = 0
+local wvLastPct = -1
+local wvStage = ""
+local wvUnhealthy = false
+local function safeNotifyJS(browserid, js, throttle)
+  if wvUnhealthy or not wv or not wv.executeJS then return end
+  local now = os.clock()
+  if throttle then
+    if now - wvLastNotify < 1.0 then return end
+    wvLastNotify = now
+  end
+  local t0 = os.clock()
+  local ok = pcall(function() wv.executeJS(browserid, js) end)
+  local dt = os.clock() - t0
+  if dt > 1.0 then
+    wvUnhealthy = true
+    print("[scriptmgr_dbg] wv slow/unhealthy (" .. string.format("%.2f", dt) .. "s), JS updates disabled")
+  end
+  return ok
+end
+local function notifyDownloadJS(browserid, task, stage, filename, progress)
 
--- rendering
+  local pct = math.floor(progress + 0.5)
+  if stage == wvStage and pct == wvLastPct then return end
+  wvStage = stage
+  wvLastPct = pct
+  safeNotifyJS(browserid, "window.app.onDownloadProgress(\"" .. task .. "\", \"" .. stage .. "\", \"" .. filename .. "\", " .. string.format("%.2f", progress) .. ")")
+end
 
--- main window
 imgui.OnFrame(
   function() return windowState[0] end,
   function(self)
@@ -698,24 +665,24 @@ imgui.OnFrame(
           wvWindow.position.h = wvHeight
         end
       end
-     
+
       if wvWindow.created and wvWindow.confirmDialog.text ~= nil and isWebViewsLoaded then
         if wvWindow.visible then
           wv.setVisible(0, false)
           wvWindow.visible = false
         end
         imgui.SetCursorPosY(imgui.GetWindowSize().y / 3)
-        imgui.SetCursorPosX(imgui.GetWindowWidth()/2-imgui.CalcTextSize(wvWindow.confirmDialog.text).x/2) 
+        imgui.SetCursorPosX(imgui.GetWindowWidth()/2-imgui.CalcTextSize(wvWindow.confirmDialog.text).x/2)
         imgui.Text(wvWindow.confirmDialog.text)
         local buttons = wvWindow.confirmDialog.buttons
         local btn_width = imgui.CalcTextSize(wvWindow.confirmDialog.text).x + imgui.GetStyle().FramePadding.x * 2
-        
+
         for i = 1, #buttons do
             local text = buttons[i]
             local window_width = imgui.GetWindowWidth()
-        
+
             imgui.SetCursorPosX((window_width - btn_width) / 2)
-        
+
             if imgui.Button(text, imgui.ImVec2(btn_width, 0)) then
                 wvWindow.confirmDialog.response = i
                 wvWindow.confirmDialog.text = nil
@@ -723,12 +690,12 @@ imgui.OnFrame(
                 wv.setVisible(0, true)
                 wvWindow.visible = true
             end
-        end 
+        end
       elseif wvWindow.serverfind or wvWindow.progress < 100 then
         imgui.SetCursorPosX(imgui.GetWindowWidth()/2-250/2)
-        imgui.SetCursorPosY(imgui.GetWindowContentRegionMax().y/2) 
+        imgui.SetCursorPosY(imgui.GetWindowContentRegionMax().y/2)
         if isWebViewsLoaded then
-          imgui.SetCursorPosY(imgui.GetCursorPosY()-250/2.2) 
+          imgui.SetCursorPosY(imgui.GetCursorPosY()-250/2.2)
           imgui.InfinitySpinner('loader', 250, 7, {1, 1, 1, 1}, {5, 5, 5, 0.1})
           if wvWindow.serverfind then
             imgui.SetCursorPosX(imgui.GetWindowWidth()/2-imgui.CalcTextSize(locales.get("wv_serverfind")).x/2)
@@ -749,7 +716,7 @@ imgui.OnFrame(
           wv.setVisible(0, true)
           wvWindow.visible = true
       end
-      imgui.SetCursorPosY(tabBarPosY) 
+      imgui.SetCursorPosY(tabBarPosY)
     end
 
     if imgui.BeginTabBar('Tabs') then
@@ -757,7 +724,7 @@ imgui.OnFrame(
       local didShellRender = false
       local didScriptStoreRender = false
 
-      if imgui.BeginTabItem(locales.get("scripts")) then -- common scripts control
+      if imgui.BeginTabItem(locales.get("scripts")) then
         if imgui.InputTextWithHint('##ScriptsSearch', locales.get("find") .. '...', scriptsSearchBuffer, ffi.sizeof(scriptsSearchBuffer)) then
           scriptsSearchText = ffi.string(scriptsSearchBuffer):lower()
         end
@@ -768,7 +735,7 @@ imgui.OnFrame(
 
         if imgui.BeginPopupModal(locales.get("confirm_reload_all")) then
           imgui.Text(locales.get("sure_reload_all"))
-    
+
           if imgui.Button(locales.get("yes"), imgui.ImVec2(150 * MONET_DPI_SCALE, 50 * MONET_DPI_SCALE)) then
             reloadScripts()
             Notifications.Show(locales.get("reloaded_all"), Notifications.TYPE.OK)
@@ -778,11 +745,11 @@ imgui.OnFrame(
           if imgui.Button(locales.get("no"), imgui.ImVec2(150 * MONET_DPI_SCALE, 50 * MONET_DPI_SCALE)) then
             imgui.CloseCurrentPopup()
           end
-    
+
           imgui.End()
         end
 
-        imgui.BeginChild('##ScriptsChild') -- child in order to only scroll scripts
+        imgui.BeginChild('##ScriptsChild')
         imgui.PushStyleVarVec2(imgui.StyleVar.ItemSpacing, imgui.ImVec2(0, 0))
         imgui.Columns(2, '##ScriptsColumns', false)
         imgui.PopStyleVar()
@@ -798,7 +765,7 @@ imgui.OnFrame(
               end
             end
           end
-          
+
           for i, v in ipairs(disabledScripts) do
             if v.name:lower():find(scriptsSearchText, 1, true) then
               imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(0.5, 0.5, 0.5, 1.0))
@@ -816,12 +783,12 @@ imgui.OnFrame(
 
         local scr = script.get(selectedScriptId)
         local selectedDisabledScript = nil
-        
+
         if selectedScriptId < 0 then
           local disabledIndex = math.abs(selectedScriptId + 1000)
           selectedDisabledScript = disabledScripts[disabledIndex]
         end
-        
+
         if scr ~= nil then
           imgui.TextWrapped(locales.get("scr_name", scr.name))
           if scr.filename ~= scr.name then
@@ -877,7 +844,7 @@ imgui.OnFrame(
 
           if imgui.BeginPopupModal(locales.get("delete_script")) then
             imgui.Text(locales.get("confirm_delete_script", scr.name))
-    
+
             if imgui.Button(locales.get("yes"), imgui.ImVec2(150 * MONET_DPI_SCALE, 50 * MONET_DPI_SCALE)) then
               scr:unload()
               os.remove(scr.path)
@@ -888,11 +855,10 @@ imgui.OnFrame(
             if imgui.Button(locales.get("no"), imgui.ImVec2(150 * MONET_DPI_SCALE, 50 * MONET_DPI_SCALE)) then
               imgui.CloseCurrentPopup()
             end
-    
+
             imgui.End()
           end
 
-          -- pcall hell in order to not crash Script Manager if selected script implements invalid API
           if selectedScriptExports.canToggle ~= nil and selectedScriptExports.getToggle ~= nil and selectedScriptExports.toggle ~= nil then
             local status, result = pcall(selectedScriptExports.canToggle)
             if not status or type(result) ~= 'boolean' then
@@ -928,8 +894,7 @@ imgui.OnFrame(
           imgui.TextWrapped(locales.get("status_disabled"))
           imgui.TextWrapped(locales.get("scr_path", selectedDisabledScript.path))
           imgui.PopStyleColor()
-  
-          
+
           if imgui.Button(locales.get("enable")) then
             if enableScript(selectedDisabledScript.path) then
               selectedScriptId = -1
@@ -939,10 +904,10 @@ imgui.OnFrame(
           if imgui.Button(locales.get("delete")) then
             imgui.OpenPopup(locales.get("delete_disabled_script"))
           end
-          
+
           if imgui.BeginPopupModal(locales.get("delete_disabled_script")) then
             imgui.Text(locales.get("confirm_delete_disabled_script", selectedDisabledScript.name))
-    
+
             if imgui.Button(locales.get("yes"), imgui.ImVec2(150 * MONET_DPI_SCALE, 50 * MONET_DPI_SCALE)) then
               os.remove(selectedDisabledScript.path)
               Notifications.Show(selectedDisabledScript.name .. ':\n' .. locales.get("delted_permanently") .. '!', Notifications.TYPE.OK)
@@ -953,7 +918,7 @@ imgui.OnFrame(
             if imgui.Button(locales.get("No"), imgui.ImVec2(150 * MONET_DPI_SCALE, 50 * MONET_DPI_SCALE)) then
               imgui.CloseCurrentPopup()
             end
-    
+
             imgui.End()
           end
         else
@@ -966,7 +931,7 @@ imgui.OnFrame(
         imgui.EndTabItem()
       end
 
-      if imgui.BeginTabItem(locales.get("log")) then -- log of recent events
+      if imgui.BeginTabItem(locales.get("log")) then
         if imgui.InputTextWithHint('##LogSearch', locales.get("find") .. "...", logSearchBuffer, ffi.sizeof(logSearchBuffer)) then
           logSearchText = ffi.string(logSearchBuffer):lower()
         end
@@ -975,7 +940,7 @@ imgui.OnFrame(
           messages:clear()
         end
 
-        imgui.BeginChild('##LogChild') -- child in order to only scroll text without scrolling search and etc
+        imgui.BeginChild('##LogChild')
 
         for i, v in any_ipairs(messages) do
           if v:lower():find(logSearchText, 1, true) then
@@ -988,13 +953,13 @@ imgui.OnFrame(
         end
 
         imgui.EndChild()
-  
+
         imgui.EndTabItem()
         didLogRender = true
       end
 
-      if imgui.BeginTabItem(locales.get("last_crashes")) then -- log of last crashes
-        imgui.BeginChild('##LastCrashesChild', imgui.ImVec2(0, 0), true) -- child in order to only scroll table and for border
+      if imgui.BeginTabItem(locales.get("last_crashes")) then
+        imgui.BeginChild('##LastCrashesChild', imgui.ImVec2(0, 0), true)
         imgui.Columns(3, '##LastCrashesColumns', true)
 
         imgui.AlignTextToFramePadding()
@@ -1045,11 +1010,11 @@ imgui.OnFrame(
 
         imgui.Columns(1)
         imgui.EndChild()
-  
+
         imgui.EndTabItem()
       end
 
-      if imgui.BeginTabItem(locales.get("shell")) then -- lua shell
+      if imgui.BeginTabItem(locales.get("shell")) then
         imgui.SetNextItemWidth(-1)
         if imgui.InputTextWithHint('##ShellInput', locales.get("run") .. '...', shellInputBuffer, ffi.sizeof(shellInputBuffer), imgui.InputTextFlags.EnterReturnsTrue) then
           local text = ffi.string(shellInputBuffer)
@@ -1058,17 +1023,16 @@ imgui.OnFrame(
           shellInputHistory:push(text)
           shellInputHistoryPos = 0
 
-          -- first try to load as expression
           local chunk, err = load('return prettyPrint(' .. text .. ')')
           if not chunk then
-            -- then as statement
+
             chunk, err = load(text)
           end
           if not chunk then
-            -- compilation failed
+
             shellHistory:push('<!> Syntax error: ' .. tostring(err))
           else
-            -- provide repl result
+
             local result, err = pcall(chunk)
             if not result then
               shellHistory:push('<!> Error: ' .. tostring(err))
@@ -1110,7 +1074,7 @@ imgui.OnFrame(
           shellInputHistory:clear()
         end
 
-        imgui.BeginChild('##ShellChild') -- child in order to only scroll text without scrolling input and etc
+        imgui.BeginChild('##ShellChild')
 
         for i, v in any_ipairs(shellHistory) do
           local doPop = false
@@ -1129,12 +1093,12 @@ imgui.OnFrame(
         end
 
         imgui.EndChild()
-  
+
         imgui.EndTabItem()
         didShellRender = true
       end
 
-      if imgui.BeginTabItem(locales.get("settings")) then -- settings menu
+      if imgui.BeginTabItem(locales.get("settings")) then
         if imgui.Checkbox(locales.get("crash_notifications"), imCrashNotifications) then
           config.crashNotifications = imCrashNotifications[0]
           cfg.save(config)
@@ -1247,7 +1211,7 @@ imgui.OnFrame(
                       if wvWindow.confirmDialog.response == 1 then
                         safeNotifyJS(data.browserid, "window.app.onInstallStage('loading')", false)
                         safeNotifyJS(data.browserid, "window.app.setFilename('"..json.name.."')", false)
-                        showAds() -- udalenie etoi stroki ostavit razraba bez edi na 100 dneu
+                        showAds()
                         downloadToFile(json.url, jsonModPath..json.name, function(type, pos, total_size)
                           if isTaskCancelled() then
                             stage = "cancelled"
@@ -1303,8 +1267,8 @@ imgui.OnFrame(
                               stage = "completed"
                               notifyUpdate()
                               safeNotifyJS(data.browserid, "window.app.setModInstalled(\""..json.name.."\", true)", false)
-                              if json.type == "mod" then 
-                                script.load(jsonModPath..json.name) 
+                              if json.type == "mod" then
+                                script.load(jsonModPath..json.name)
                               end
                             end
                           elseif type == "error" then
@@ -1323,8 +1287,8 @@ imgui.OnFrame(
                       wvWindow.confirmDialog.text = locales.get("confirm_delete", json.name)
                       while wvWindow.confirmDialog.text ~= nil do wait(0) end
                       if wvWindow.confirmDialog.response == 1  then
-                        if not json.zip then 
-                          unloadScriptByName(jsonModPath..json.name) 
+                        if not json.zip then
+                          unloadScriptByName(jsonModPath..json.name)
                         end
                         local removePath = jsonModPath..json.name
                         os.remove(removePath)
@@ -1334,7 +1298,7 @@ imgui.OnFrame(
                   elseif json.action == "isModInstalled" and jsonModPath then
                     local checkPath = jsonModPath..json.name
                     local attr = lfs.attributes(checkPath)
-                    if attr then 
+                    if attr then
                       wv.executeJS(data.browserid, "window.app.setModInstalled(\""..json.name.."\", true, "..attr.size..")")
                     else
                       wv.executeJS(data.browserid, "window.app.setModInstalled(\""..json.name.."\", false)")
@@ -1381,7 +1345,6 @@ imgui.OnFrame(
           wvWindow.serverfind = true
           wvWindow.created = true
 
-
           local headers = {
             ["accept"] = "*/*",
             ["user-agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:67.0) Gecko/20100101 Firefox/67.0",
@@ -1407,13 +1370,12 @@ imgui.OnFrame(
         end
       end
 
-
       imgui.EndTabBar()
       wasInLog = didLogRender
       wasInShell = didShellRender
       if wasInScriptStore ~= didScriptStoreRender then
-        if wvWindow.created then 
-          wv.setVisible(0, didScriptStoreRender) 
+        if wvWindow.created then
+          wv.setVisible(0, didScriptStoreRender)
           wvWindow.visible = didScriptStoreRender
         end
         wasInScriptStore = didScriptStoreRender
@@ -1438,10 +1400,6 @@ imgui.OnFrame(
   end
 )
 
-
--- custom events
-
--- called whenever a script crashes
 function onScriptCrashed(scr, msg)
   if config.crashNotifications then
     Notifications.Show(scr.name .. ':\n' .. locales.get("crashed") .. '!', Notifications.TYPE.ERROR)
@@ -1457,10 +1415,6 @@ function onScriptCrashed(scr, msg)
   messages:push('(crash) ' .. scr.name .. ': ' .. msg)
 end
 
-
--- events
-
--- script message handler, save them to buffer
 function onScriptMessage(msg, scr)
   if config.scriptMessageNotifications then
     Notifications.Show(scr.name .. ':\n' .. msg, Notifications.TYPE.INFO)
@@ -1469,7 +1423,6 @@ function onScriptMessage(msg, scr)
   messages:push('(script) ' .. scr.name .. ': ' .. msg)
 end
 
--- system message handler, get crash info
 function onSystemMessage(msg, level, scr)
   if level == levels.TYPE_SYSTEM then
     if scr ~= nil then
@@ -1492,7 +1445,6 @@ function onSystemMessage(msg, level, scr)
   end
 end
 
--- invoke onScriptCrashed if terminate was called due to script crash
 function onScriptTerminate(scr, quit)
   if quit then return end
 
@@ -1504,12 +1456,11 @@ function onScriptTerminate(scr, quit)
   end
 
   if scr == script.this then
-    -- cfg.save(config)
-    if wvWindow.created then wv.deleteBrowser(0) end 
+
+    if wvWindow.created then wv.deleteBrowser(0) end
   end
 end
 
--- mark script as reloaded in last crashes if it was loaded
 function onScriptLoad(scr)
   local path = scr.path
   if reloadLastCrashInfos[path] ~= nil then
@@ -1526,10 +1477,9 @@ function onScriptLoad(scr)
   end
 end
 
--- check for menu opening
 function main()
   locales.set_lang(config.currentLang)
-  --lua_thread.create(showSwipeLeftHint)
+
   local wd = getWorkingDirectory()
   local count = 0
   for f in lfs.dir(wd) do
@@ -1545,27 +1495,27 @@ function main()
     wvWindow.confirmDialog.text = locales.get("confirm_suggestion")
     wvWindow.confirmDialog.buttons = {locales.get("yes"), locales.get("skip_suggestion")}
     while wvWindow.confirmDialog.text ~= nil do wait(0) end
-    if wvWindow.confirmDialog.response == 2 then 
+    if wvWindow.confirmDialog.response == 2 then
         config.skipSuggestion = true
-        cfg.save(config) 
+        cfg.save(config)
         thisScript():reload()
     end
   end
   while true do
     if isSampAvailable() and not commandsRegistered then
-      sampRegisterChatCommand("store", function() 
+      sampRegisterChatCommand("store", function()
         windowState[0] = true
         wvWindow.force = true
-      --  lua_thread.create(showSwipeLeftHint)
+
       end)
-      sampRegisterChatCommand("mtg", function() 
+      sampRegisterChatCommand("mtg", function()
         windowState[0] = true
         wvWindow.force = true
-      --  lua_thread.create(showSwipeLeftHint)
+
       end)
-      sampRegisterChatCommand("mods", function() 
+      sampRegisterChatCommand("mods", function()
         windowState[0] = true
-       -- lua_thread.create(showSwipeLeftHint)
+
       end)
       commandsRegistered = true
     end
@@ -1580,10 +1530,8 @@ function main()
   end
 end
 
--- added functions (by arzmod)
-
 function httpRequest(request, body, handler)
-    -- start polling task
+
     if not copas.running then
         copas.running = true
         lua_thread.create(function()
@@ -1596,7 +1544,7 @@ function httpRequest(request, body, handler)
             copas.running = false
         end)
     end
-    -- do request
+
     if handler then
         return copas.addthread(function(r, b, h)
             copas.setErrorHandler(function(err) h(nil, err) end)
@@ -1612,7 +1560,6 @@ function httpRequest(request, body, handler)
         return table.unpack(results)
     end
 end
-
 
 function addProtocolIfNeeded(url)
     if not url:match("^https?://") then
@@ -1637,15 +1584,13 @@ function imgui.Link(link, text)
     DL:AddLine(imgui.ImVec2(p.x, p.y + tSize.y), imgui.ImVec2(p.x + tSize.x, p.y + tSize.y), color)
 end
 
-
--- https://www.blast.hk/threads/13380/post-1651546
 local infinityStates = {}
 
 function imgui.InfinitySpinner(label, size, thickness, activeColor, backgroundColor)
     local draw_list = imgui.GetWindowDrawList()
     local pos = imgui.GetCursorScreenPos()
     local time = imgui.GetTime()
-    
+
     local width = size or 100
     local height = width / 2.2
     local thickness = thickness or 4
@@ -1692,40 +1637,6 @@ function imgui.InfinitySpinner(label, size, thickness, activeColor, backgroundCo
     imgui.Dummy(imgui.ImVec2(width, height))
 end
 
-
--- https://rentry.co/monetloader-download-functions
--- Safe WebView JS notifier: throttled, wrapped in pcall, and latched off if
--- the WebView ever takes too long (the store WebView runs inside the game
--- process and a wedged WebView would otherwise block the game thread).
-local wvLastNotify = 0
-local wvLastPct = -1
-local wvStage = ""
-local wvUnhealthy = false
-local function safeNotifyJS(browserid, js, throttle)
-  if wvUnhealthy or not wv or not wv.executeJS then return end
-  local now = os.clock()
-  if throttle then
-    if now - wvLastNotify < 1.0 then return end
-    wvLastNotify = now
-  end
-  local t0 = os.clock()
-  local ok = pcall(function() wv.executeJS(browserid, js) end)
-  local dt = os.clock() - t0
-  if dt > 1.0 then
-    wvUnhealthy = true
-    print("[scriptmgr_dbg] wv slow/unhealthy (" .. string.format("%.2f", dt) .. "s), JS updates disabled")
-  end
-  return ok
-end
-local function notifyDownloadJS(browserid, task, stage, filename, progress)
-  -- only push when the integer percent changed or the stage changed
-  local pct = math.floor(progress + 0.5)
-  if stage == wvStage and pct == wvLastPct then return end
-  wvStage = stage
-  wvLastPct = pct
-  safeNotifyJS(browserid, "window.app.onDownloadProgress(\"" .. task .. "\", \"" .. stage .. "\", \"" .. filename .. "\", " .. string.format("%.2f", progress) .. ")")
-end
-
 function downloadToFile(url, path, callback, progressInterval)
   callback = callback or function() end
   progressInterval = progressInterval or 0.1
@@ -1740,7 +1651,6 @@ function downloadToFile(url, path, callback, progressInterval)
       local http = require("socket.http")
       local ltn = require("ltn12")
 
-      -- Stalled connections must fail fast, not hang the worker forever.
       local timeout = { connect = 15, send = 15, receive = 30 }
 
       local _, res, code, headers = pcall(http.request, {
@@ -1780,7 +1690,7 @@ function downloadToFile(url, path, callback, progressInterval)
         if chunk then
           return ltn.sink.file(f)(chunk, err)
         elseif fileClosed then
-          -- ltn12 already closed the handle on EOF; nothing to do.
+
           return true
         end
         return ltn.sink.file(f)(chunk, err)
@@ -1810,7 +1720,6 @@ function downloadToFile(url, path, callback, progressInterval)
             return ltn.sink.file(f)(chunk, err)
           end
 
-          -- EOF (chunk == nil, no error): ltn12 closes the handle itself.
           fileClosed = true
           if err then
             progressChannel:push("error", tostring(err))
@@ -1855,8 +1764,7 @@ function downloadToFile(url, path, callback, progressInterval)
   local thread = runner(url, path)
 
   local function checkStatus()
-    -- thread:status() returns the thread's result array on failure
-    -- ({ "failed", <message> }); on completion it returns "completed".
+
     local st1, st2 = thread:status()
     if st1 == "failed" or st1 == "completed" then
       print("[scriptmgr_dbg] thread " .. tostring(st1) .. " detail=" .. tostring(st2))
@@ -1881,8 +1789,7 @@ function downloadToFile(url, path, callback, progressInterval)
     local lastBytes = 0
 
     while true do
-      -- Drain all pending progress messages this frame (bounded), so the
-      -- channel stays near-empty and the UI stays current on fast links.
+
       local drained = 0
       while progressChannel:size() > 0 and drained < 200 do
         local msg = { progressChannel:pop() }
@@ -1911,14 +1818,12 @@ function downloadToFile(url, path, callback, progressInterval)
         break
       end
 
-      -- Watchdog: log while waiting (visible in neomloader.log)
       local now = os.clock()
       if now - lastWatchdog >= 5 then
         lastWatchdog = now
         print("[scriptmgr_dbg] watchdog waiting status=" .. tostring(tstatus) .. " chan=" .. tostring(progressChannel:size()) .. " lastBytes=" .. tostring(lastBytes) .. " idle=" .. string.format("%.0f", now - lastProgressAt) .. "s")
       end
 
-      -- Stall detection: running but no new bytes for 60s -> cancel + error.
       if tstatus == "running" and now - lastProgressAt >= 60 and lastBytes > 0 then
         print("[scriptmgr_dbg] stall detected: no bytes for 60s, cancelling")
         cancelChannel:push(true)
@@ -1934,17 +1839,16 @@ function downloadToFile(url, path, callback, progressInterval)
 end
 function toboolean(num) return num > 0 end
 
-
 function disableScript(scriptPath)
   local workingDir = getWorkingDirectory()
   local disabledDir = workingDir .. "/scriptmgr/disabled"
-  
+
   if not doesDirectoryExist(workingDir .. "/scriptmgr") then createDirectory(workingDir .. "/scriptmgr") end
   if not doesDirectoryExist(disabledDir) then createDirectory(disabledDir) end
-  
+
   local fileName = scriptPath:match("([^\\/]+)$") or scriptPath
   local disabledPath = disabledDir .. "/" .. fileName
-  
+
   local success = os.rename(scriptPath, disabledPath)
   if success then
     Notifications.Show(locales.get("script_disabled", fileName), Notifications.TYPE.OK)
@@ -1959,11 +1863,11 @@ end
 function enableScript(scriptPath)
   local workingDir = getWorkingDirectory()
   local disabledDir = workingDir .. "/scriptmgr/disabled"
-  
+
   local fileName = scriptPath:match("([^\\/]+)$") or scriptPath
   local disabledPath = disabledDir .. "/" .. fileName
   local enabledPath = workingDir .. "/" .. fileName
-  
+
   local success = os.rename(disabledPath, enabledPath)
   if success then
     Notifications.Show(locales.get("script_enabled", fileName), Notifications.TYPE.OK)
@@ -1980,7 +1884,7 @@ function getDisabledScripts()
   local workingDir = getWorkingDirectory()
   local disabledDir = workingDir .. "/scriptmgr/disabled"
   local disabledScripts = {}
-  
+
   local attr = lfs.attributes(disabledDir)
   if attr and attr.mode == 'directory' then
     for file in lfs.dir(disabledDir) do
@@ -1993,32 +1897,31 @@ function getDisabledScripts()
       end
     end
   end
-  
+
   return disabledScripts
 end
 
 function unloadScriptByName(scriptPath)
   local scripts = script.list()
-  
+
   for i, scr in ipairs(scripts) do
     if scr.path == scriptPath then
       scr:unload()
       return true, locales.get("script_unloaded", scriptPath)
     end
   end
-  
+
   return false, locales.get("script_not_found", scriptPath)
 end
-
 
 function getRealPath(relativePath)
     if not relativePath or relativePath == "" then
         return nil
     end
-    
+
     local basePath
     local pathPart = relativePath
-    
+
     if relativePath:find("^data/") then
         local fullPath = getGameDirectory()
         basePath = fullPath:match("^(.+)/[^/]+$") or fullPath
@@ -2026,8 +1929,7 @@ function getRealPath(relativePath)
     elseif relativePath:find("^media/") then
         local fullPath = getWorkingDirectory()
         pathPart = relativePath:sub(7)
-        -- If the media/ path targets monetloader/, resolve to the working dir itself
-        -- so downloads land inside neomloader/ where script.list() enumerates them.
+
         if pathPart:match("^monetloader/?$") then
             basePath = fullPath
             pathPart = ""
@@ -2037,12 +1939,12 @@ function getRealPath(relativePath)
     else
         return relativePath
     end
-    
+
     local pathComponents = {}
     for component in pathPart:gmatch("([^/]+)") do
         table.insert(pathComponents, component)
     end
-    
+
     local currentPath = basePath
     for i, component in ipairs(pathComponents) do
         local testPath = currentPath .. "/" .. component
@@ -2053,21 +1955,21 @@ function getRealPath(relativePath)
         end
         currentPath = testPath
     end
-    
+
     return currentPath
 end
 
 function showAds()
   if not isVip then
-    local ok, result = pcall(function() 
+    local ok, result = pcall(function()
       local adsClass = envu.FindClass("com/arzmod/radare/AppAds")
       if not adsClass then
           print("Failed to find AppAds class")
           return false
       end
       local isShowed = envu.CallStaticBooleanMethod(adsClass, "showRewarded", "()Z")
-      return toboolean(isShowed) 
-    end) 
+      return toboolean(isShowed)
+    end)
     if ok and result then wv.executeJS(0, "window.app.onViewAds()") end
   end
 end
@@ -2097,8 +1999,6 @@ function unpack_archive(path_to_archive, output_path, progress_callback)
     local buffer = env.NewByteArray(256 * 1024)
     print("[scriptmgr_dbg] unpack_archive start src=" .. tostring(path_to_archive) .. " dst=" .. tostring(output_path) .. " entries=" .. tostring(total))
 
-    -- Yield back to the game loop every 8 chunks (8 * 256KB = 2MB) so unpacking
-    -- a large archive does not freeze the game thread.
     local YIELD_EVERY_CHUNKS = 8
 
     while toboolean(envu.CallBooleanMethod(entries, "hasMoreElements", "()Z")) do
@@ -2148,7 +2048,7 @@ function unpack_archive(path_to_archive, output_path, progress_callback)
 
         processed = processed + 1
         if not progress_callback("unpacking", processed, total, name) then break end
-        wait(0) -- yield once per archive entry as well
+        wait(0)
     end
 
     env.DeleteLocalRef(baseDir)
@@ -2174,7 +2074,7 @@ end
 function showSwipeLeftHint()
     local m_pWidgets = jit.arch == "arm" and memory.getuint32(MONET_GTASA_BASE + 0x67947C) or memory.getuint64(MONET_GTASA_BASE + 0x850910)
     local widgetPtr = jit.arch == "arm64" and memory.getuint64(m_pWidgets + WIDGET_RADAR * 8) or memory.getuint32(m_pWidgets + WIDGET_RADAR * 4)
-    
+
     while widgetPtr == 0 do widgetPtr = jit.arch == "arm64" and memory.getuint64(m_pWidgets + WIDGET_RADAR * 8) or memory.getuint32(m_pWidgets + WIDGET_RADAR * 4) wait(0) end
     while not (memory.getuint8(widgetPtr + (jit.arch == "arm" and 78 or 90)) == 1) do wait(0) end
 
