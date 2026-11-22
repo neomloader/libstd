@@ -364,6 +364,18 @@ mimgui.ColorConvertFloat4ToU32 = function(f4)
     return ffi.C.igColorConvertFloat4ToU32(to_vec4(f4))
 end
 
+mimgui.SetDragDropPayload = function(type, data, sz, cond)
+    return ffi.C.igSetDragDropPayload(type, data, sz, cond or 0)
+end
+
+mimgui.BeginDragDropSource = function(flags)
+    return ffi.C.igBeginDragDropSource(flags or 0)
+end
+
+mimgui.AcceptDragDropPayload = function(type, flags)
+    return ffi.C.igAcceptDragDropPayload(type, flags or 0)
+end
+
 local function to_vec2(v)
     if v == nil then return ImVec2(0, 0) end
     if ffi.istype(imvec2_ct, v) then return v end

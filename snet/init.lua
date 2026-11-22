@@ -25,7 +25,16 @@ local server_class = require("snet.server")
 local client_class = require("snet.client")
 
 function snet.server(address, port)
-  local new_object = {}
+  local new_object = {
+    address = address,
+    port = port,
+    unique_id = 0,
+    last_ids = {},
+    events = {},
+    clients = {},
+    packets = {},
+    blacklist = {}
+  }
   setmetatable(new_object, {
     __index = server_class,
     __tostring = function()
@@ -33,18 +42,27 @@ function snet.server(address, port)
     end
   })
 
-  new_object.socket = socket.udp()
-  new_object.socket:settimeout(0)
-  new_object.socket:setsockname(address, port)
-
-  new_object.address = address
-  new_object.port = port
+  local sock = socket.udp()
+  if sock then
+    sock:settimeout(0)
+    pcall(function() sock:setsockname(address, port) end)
+  end
+  new_object.socket = sock
 
   return new_object
 end
 
 function snet.client(address, port)
-  local new_object = {}
+  local new_object = {
+    address = address,
+    port = port,
+    status = SNET_DISCONNECTED,
+    connected = false,
+    unique_id = 0,
+    last_ids = {},
+    events = {},
+    packets = {}
+  }
   setmetatable(new_object, {
     __index = client_class,
     __tostring = function()
@@ -52,12 +70,24 @@ function snet.client(address, port)
     end
   })
 
-  new_object.socket = socket.udp()
-  new_object.socket:settimeout(0)
-  new_object.socket:setpeername(address, port)
+  local sock, err = socket.udp()
+  if not sock then
+    new_object.connect_error = err or "failed to create udp socket"
+    return new_object
+  end
 
-  new_object.address = address
-  new_object.port = port
+  new_object.socket = sock
+  sock:settimeout(0)
+  local ok, res, serr = pcall(function()
+    return sock:setpeername(address, port)
+  end)
+
+  if ok and (res == 1 or res == true) then
+    new_object.connected = true
+  else
+    new_object.connected = false
+    new_object.connect_error = (not ok and tostring(res)) or serr or "setpeername failed"
+  end
 
   return new_object
 end

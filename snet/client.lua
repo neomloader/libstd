@@ -4,6 +4,7 @@ local bstream = require("snet.bstream")
 client.address = "127.0.0.1"
 client.port = 13322
 client.status = SNET_DISCONNECTED
+client.connected = false
 client.unique_id = 0
 client.last_ids = {}
 client.events = {}
@@ -14,13 +15,28 @@ function client:add_event_handler(event, callback)
 end
 
 local function get_packet(object)
-  local data = object.socket:receive()
-  if data then
-    if data:sub(1, 1):byte() ~= 0x0 then return false end
-    data = data:sub(2, #data)
-    return data
-  end
-  return false
+  if not object.connected or not object.socket then return false end
+  local ok, data = pcall(function() return object.socket:receive() end)
+  if not ok or not data then return false end
+  if data:sub(1, 1):byte() ~= 0x0 then return false end
+  data = data:sub(2, #data)
+  return data
+end
+
+local function send_packet(object, unique_id, packet_id, priority, bytes)
+  if not object.connected or not object.socket then return false end
+  local data = bstream.new(bytes)
+  data.write_ptr = 1
+
+  data:write(BS_UINT32, unique_id)
+  data:write(BS_UINT32, packet_id)
+  data:write(BS_UINT8, priority)
+
+  local ok, res = pcall(function()
+    return object.socket:send('\0' .. data.bytes .. '\0')
+  end)
+  if not ok or not res then return false end
+  return true
 end
 
 local function receive_packet(object)
@@ -52,7 +68,7 @@ local function receive_packet(object)
 
   for i, v in ipairs(object.events) do
     if v[1] == 'onReceivePacket' then
-      v[2](packet_id, bstream.new(clean_data))
+      pcall(v[2], packet_id, bstream.new(clean_data))
     end
   end
 
@@ -70,18 +86,10 @@ local function receive_packet(object)
   return true
 end
 
-local function send_packet(object, unique_id, packet_id, priority, bytes)
-  local data = bstream.new(bytes)
-  data.write_ptr = 1
-
-  data:write(BS_UINT32, unique_id)
-  data:write(BS_UINT32, packet_id)
-  data:write(BS_UINT8, priority)
-
-  return object.socket:send('\0' .. data.bytes .. '\0')
-end
-
 function client:send(packet_id, stream, priority)
+  if not self.connected or not self.socket then
+    return false, self.connect_error or "socket not connected"
+  end
   local unique_id = self.unique_id
 
   self.unique_id = self.unique_id + 1
@@ -89,12 +97,13 @@ function client:send(packet_id, stream, priority)
     self.unique_id = 0
   end
 
-  send_packet(self, unique_id, packet_id, priority, stream.bytes)
+  local ok = send_packet(self, unique_id, packet_id, priority, stream and stream.bytes or "")
+  if not ok then return false end
 
   if priority > 0 then
     table.insert(self.packets, {
       unique_id = unique_id, packet_id = packet_id,
-      priority = priority, bytes = stream.bytes,
+      priority = priority, bytes = stream and stream.bytes or "",
       times = 0, last_time = os.time()
     })
   end
@@ -103,15 +112,18 @@ function client:send(packet_id, stream, priority)
 end
 
 local function resend_packets(object)
+  if not object.connected or not object.socket then return false end
   for i = #object.packets, 1, -1 do
     local v = object.packets[i]
     if os.time() ~= v.last_time then
       v.last_time = os.time()
       v.times = v.times + 1
 
-      send_packet(object, v.unique_id, v.packet_id, v.priority, v.bytes)
+      local ok = send_packet(object, v.unique_id, v.packet_id, v.priority, v.bytes)
 
-      if v.priority == SNET_SYSTEM_PRIORITY and object.status ~= SNET_CONNECTED then table.remove(object.packets, i)
+      if not ok and object.status ~= SNET_CONNECTED then
+        table.remove(object.packets, i)
+      elseif v.priority == SNET_SYSTEM_PRIORITY and object.status ~= SNET_CONNECTED then table.remove(object.packets, i)
       elseif v.priority == SNET_HIGH_PRIORITY and v.times >= 20 then table.remove(object.packets, i)
       elseif v.priority == SNET_MEDIUM_PRIORITY and v.times >= 10 then table.remove(object.packets, i)
       elseif v.priority == SNET_LOW_PRIORITY and v.times >= 5 then table.remove(object.packets, i) end
@@ -122,8 +134,10 @@ local function resend_packets(object)
 end
 
 function client:process()
+  if not self.connected or not self.socket then return false end
   receive_packet(self)
   resend_packets(self)
+  return true
 end
 
 return client

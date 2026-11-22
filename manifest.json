@@ -1,6 +1,6 @@
 {
   "version": "1.0.2",
-  "updated_at": "2026-11-14T20:49:39.861285+00:00",
+  "updated_at": "2026-11-22T03:20:45.551754+00:00",
   "total_files": 122,
   "files": {
     "LIP.lua": {
@@ -64,8 +64,8 @@
       "size": 18250
     },
     "inicfg.lua": {
-      "sha256": "c3dceca75e76cddee8b5dee3d230087ecf14ea9bbc87f7736f00bf12a5906e59",
-      "size": 3223
+      "sha256": "887ebbc4822e3976800fcd758cade4d3522e052f084008bf608ac32ef82bea86",
+      "size": 3809
     },
     "jsoncfg.lua": {
       "sha256": "113110655b8f240532e08af599e6a528850908448eb6002553e933ed6743affc",
@@ -148,16 +148,16 @@
       "size": 483321
     },
     "mimgui/compat_imgui.lua": {
-      "sha256": "80a93442c9c464364a55826b6c60d041ee173c794704e3fd3e3dfd24479b110a",
-      "size": 1801
+      "sha256": "e493b4d95ef57e9c64fbc1e3f9bf5662dddd153dea24a0aa5692249d17310e56",
+      "size": 2017
     },
     "mimgui/enums.lua": {
       "sha256": "2b8178301bf54d660e80967c9c859f8e5e6f302ab51a47a783f3d6728a19b2e4",
       "size": 33424
     },
     "mimgui/init.lua": {
-      "sha256": "e8ec0372a04ef273ac98728d15552ffe633e0cf9d2dc12ee670e6279a32de98d",
-      "size": 116071
+      "sha256": "69ea267800d29a4ddae949a630042d96a752015fe734f7acf478d4550449f124",
+      "size": 116418
     },
     "mimgui/trebucbd.ttf": {
       "sha256": "dfcc306777a594d2815368547dd897e2ac82aff8073e55d9e682569939e49b81",
@@ -220,8 +220,8 @@
       "size": 6730
     },
     "samp/events/core.lua": {
-      "sha256": "2f0d2ac1a4ae6da6742b1511a04cfd4643545e130a036ec0a971453c986dce87",
-      "size": 4431
+      "sha256": "7377555dc4b2c1116d05e11cab7a38e38e68951daa287334c63c199bb91194ac",
+      "size": 3599
     },
     "samp/events/extra_types.lua": {
       "sha256": "6c6ffc402212d1839528df718d9295d9718551b1c6cdb77bbfa56e8fe355e655",
@@ -468,24 +468,24 @@
       "size": 310
     },
     "game/weapons.lua": {
-      "sha256": "1843758c78ed22e69bae5139b7dc9ebe73446a0b75d70eb5caf224eea0ebd318",
-      "size": 4924
+      "sha256": "d48d01d3d141271377d69738468aa5454477bc11c9ded274a9e30a6d1dfe7962",
+      "size": 4890
     },
     "snet/bstream.lua": {
       "sha256": "d63582967f30981628e777677e895fa79d43314dab43c8bc4ef480dedb419e42",
       "size": 1557
     },
     "snet/client.lua": {
-      "sha256": "9154c0aa06c6a36abb7f77086641c55aab65964850295ad0dce1b636337f178c",
-      "size": 3335
+      "sha256": "ed396981fdda4d4f71212effe368022a65233ee01bfa7f17cf391a9953e09c2c",
+      "size": 4101
     },
     "snet/init.lua": {
-      "sha256": "1882c095c352c2914e695e0d765e70ce4306ad26a09f21f86e49ebe9f3573d76",
-      "size": 1406
+      "sha256": "835a699910b22d319a820967de4778df12602797c85da12ea28efc7a2a5a6d3e",
+      "size": 2040
     },
     "snet/server.lua": {
-      "sha256": "3e1010f486266f25fddb6210f8e3703a0c48852f51c6c01bf533516223cfc7b4",
-      "size": 5405
+      "sha256": "a0f58b57c9a5183dfcba075811b6aad456ea8d813ba7aa8bb13de591ef380b09",
+      "size": 5584
     },
     "snet/utilities/bcoder.lua": {
       "sha256": "b146744fb775d042622053702aa2ae1cebd9a053b2c752803dc538693b53898b",

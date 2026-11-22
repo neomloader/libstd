@@ -59,22 +59,21 @@ function server:unblock_address(address)
 end
 
 local function get_packet(object)
-  local data, address, port = object.socket:receivefrom()
-  if data and address and port then
-    local is_block, list_id = is_blacklisted(object, tostring(address))
-    if is_block then
-      if os.time() >= object.blacklist[list_id][2] then
-        object.blacklist[list_id][2] = os.time() + 60
-        object:send(SNET_BLOCK_PACKET, bstream.new(),
-        SNET_BYPASS_PRIORITY, address, port)
-      end
-      return false
+  if not object.socket then return false end
+  local ok, data, address, port = pcall(function() return object.socket:receivefrom() end)
+  if not ok or not data or not address or not port then return false end
+  local is_block, list_id = is_blacklisted(object, tostring(address))
+  if is_block then
+    if os.time() >= object.blacklist[list_id][2] then
+      object.blacklist[list_id][2] = os.time() + 60
+      object:send(SNET_BLOCK_PACKET, bstream.new(),
+      SNET_BYPASS_PRIORITY, address, port)
     end
-    if data:sub(1, 1):byte() ~= 0x0 then return false end
-    data = data:sub(2, #data)
-    return data, address, port
+    return false
   end
-  return false
+  if data:sub(1, 1):byte() ~= 0x0 then return false end
+  data = data:sub(2, #data)
+  return data, address, port
 end
 
 local function receive_packet(object)
@@ -136,6 +135,7 @@ local function receive_packet(object)
 end
 
 local function send_packet(object, unique_id, packet_id, priority, bytes, address, port)
+  if not object.socket then return false end
   local data = bstream.new(bytes)
   data.write_ptr = 1
 
@@ -143,7 +143,10 @@ local function send_packet(object, unique_id, packet_id, priority, bytes, addres
   data:write(BS_UINT32, packet_id)
   data:write(BS_UINT8, priority)
 
-  return object.socket:sendto('\0' .. data.bytes .. '\0', address, port)
+  local ok, res = pcall(function()
+    return object.socket:sendto('\0' .. data.bytes .. '\0', address, port)
+  end)
+  return ok and res
 end
 
 function server:send(packet_id, stream, priority, address, port)

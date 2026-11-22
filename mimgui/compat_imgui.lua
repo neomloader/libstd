@@ -45,6 +45,11 @@ compat.ShowCursor = false
 compat.LockPlayer = false
 compat.RenderInMenu = false
 
+compat.SetNextWindowPosCenter = function(cond)
+    local io = mimgui.GetIO()
+    return mimgui.SetNextWindowPos(mimgui.ImVec2(io.DisplaySize.x * 0.5, io.DisplaySize.y * 0.5), cond or 0, mimgui.ImVec2(0.5, 0.5))
+end
+
 compat.Begin = function(name, p_open, flags)
     if type(p_open) == "boolean" then
         local b = mimgui.new.bool(p_open)

@@ -7,6 +7,17 @@ end
 
 CONFIG_PATH_SEP = PATH_SEPARATOR .. 'config' .. PATH_SEPARATOR
 
+local function ensureDirectoryExists(dirPath)
+    if not dirPath or dirPath == '' or doesDirectoryExist(dirPath) then return end
+    local parent = dirPath:match('^(.+)[/\\][^/\\]+/?$')
+    if parent and parent ~= dirPath and not doesDirectoryExist(parent) then
+        ensureDirectoryExists(parent)
+    end
+    if not doesDirectoryExist(dirPath) then
+        createDirectory(dirPath)
+    end
+end
+
 local function find_config(file)
     local workdir = getWorkingDirectory()
     local paths = {
@@ -31,15 +42,15 @@ end
 
 function inicfg.load(default, file)
     local file = file or (script.this.filename..'.ini')
-    file:gsub('\\', PATH_SEPARATOR)
+    file = file:gsub('\\', PATH_SEPARATOR)
     if MONET_VERSION ~= nil then
-        file:gsub('moonloader/', 'monetloader/')
+        file = file:gsub('moonloader/', 'monetloader/')
     end
     local path = find_config(file)
     if not path then return default end
-    path:gsub('\\', PATH_SEPARATOR)
+    path = path:gsub('\\', PATH_SEPARATOR)
     if MONET_VERSION ~= nil then
-        path:gsub('moonloader/', 'monetloader/')
+        path = path:gsub('moonloader/', 'monetloader/')
     end
 
     local f = io.open(path, 'r')
@@ -73,9 +84,9 @@ end
 function inicfg.save(data, file)
 	assert(type(data) == 'table')
     local file = file or (script.this.filename..'.ini')
-    file:gsub('\\', PATH_SEPARATOR)
+    file = file:gsub('\\', PATH_SEPARATOR)
     if MONET_VERSION ~= nil then
-        file:gsub('moonloader/', 'monetloader/')
+        file = file:gsub('moonloader/', 'monetloader/')
     end
     local path = find_config(file)
     local dir
@@ -91,12 +102,16 @@ function inicfg.save(data, file)
             path = dir..file
         end
     end
-    path:gsub('\\', PATH_SEPARATOR)
+    path = path:gsub('\\', PATH_SEPARATOR)
     if MONET_VERSION ~= nil then
-        path:gsub('moonloader/', 'monetloader/')
+        path = path:gsub('moonloader/', 'monetloader/')
+    end
+    local targetDir = path:match('^(.+)[/\\][^/\\]+$')
+    if targetDir then
+        ensureDirectoryExists(targetDir)
     end
     if dir and not doesDirectoryExist(dir) then
-        createDirectory(dir)
+        ensureDirectoryExists(dir)
     end
     local f = io.open(path, 'w')
     if f then
