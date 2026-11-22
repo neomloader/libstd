@@ -1,7 +1,7 @@
 {
   "version": "1.0.2",
-  "updated_at": "2026-11-22T03:20:45.551754+00:00",
-  "total_files": 122,
+  "updated_at": "2026-11-22T03:25:47.980421+00:00",
+  "total_files": 124,
   "files": {
     "LIP.lua": {
       "sha256": "60c5c4b948622f640b572b126e9f2912002a8aa431ebeeb14d458bd61ea23f35",
@@ -315,9 +315,17 @@
       "sha256": "b512d3103917a9f0dee131ebd421bce4ac9438f852151117fd0debeb99f0fdcd",
       "size": 64927
     },
+    "android/screenshot.lua": {
+      "sha256": "9c30d1a0e1279a2503b1d9a816670ffe948c67349857d8b245aeb5c56c5fa977",
+      "size": 5420
+    },
     "android/jar/arzapi.jar": {
       "sha256": "e402db4dd6c79580ebcd4e4a1f4d1e44daed18985c6d2dc9a699d1ebee37dc09",
       "size": 1762
+    },
+    "android/jar/mtg-screenshot.jar": {
+      "sha256": "feb15c652307ee72c3317fff02a65e83b504394aaf1b726013982a2652b4cff5",
+      "size": 8990
     },
     "SAMemory/init.lua": {
       "sha256": "64d3cee0600662fd46e395259a318b18435591e67536d45256d05e7a49b207e5",
